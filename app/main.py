@@ -33,7 +33,7 @@ DEFAULT_CONFIG = {
     "ads_enabled": True, "ad_every_n": 1, "ad_skip_seconds": 5,
     "referral_days": 3, "pro_invites": 5,
     "payment_enabled": False,
-    "card_number": "", "card_holder": "", "sheba": "IR580560611828006998292102",   # پرداخت کارت‌به‌کارت (تأیید دستی در پنل)
+    "card_number": "", "card_holder": "پیام باب", "sheba": "IR580560611828006998292102",   # پرداخت کارت‌به‌کارت (تأیید دستی در پنل)
     "ai_endpoint": "",                       # خالی = مغز پیش‌فرض داخل اپ
     "plans": [
         {"id": "monthly", "title": "یک‌ماهه", "price": 49000, "days": 30, "badge": ""},
