@@ -10,7 +10,8 @@ from pathlib import Path
 URL = os.environ.get("DATABASE_URL", "").strip()
 _PW = os.environ.get("DB_PASSWORD", "").strip()
 if URL and _PW and "[YOUR-PASSWORD]" in URL:
-    URL = URL.replace("[YOUR-PASSWORD]", _PW)
+    from urllib.parse import quote as _q
+    URL = URL.replace("[YOUR-PASSWORD]", _q(_PW, safe=""))
 _last_hash = None
 
 
