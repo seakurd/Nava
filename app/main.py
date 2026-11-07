@@ -222,6 +222,22 @@ async def api_manual_pay(req: Request):
     return {"ok": True, "message": "پرداخت ثبت شد؛ پس از تأیید، ناوا پرو خودکار فعال می‌شود."}
 
 
+@app.post("/api/ai")
+async def api_ai(request: Request):
+    """پل هوش مصنوعی برای اپ (وقتی سرویس مستقیم از ایران در دسترس نیست)."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "bad json")
+    body["private"] = True
+    try:
+        async with httpx.AsyncClient(timeout=40) as cl:
+            r = await cl.post("https://text.pollinations.ai/openai", json=body)
+        return Response(content=r.content, status_code=r.status_code, media_type="application/json")
+    except Exception:
+        raise HTTPException(502, "ai unavailable")
+
+
 @app.get("/api/ads/next")
 def api_next_ad(device: str = ""):
     cfg = get_config()
