@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#4f46e5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ناوا">
+<link rel="apple-touch-icon" href="/app/icon-180.png">
+<link rel="manifest" href="/app/manifest.json">
+<title>ناوا — دستیار صوتی فارسی</title>
+<style>
+@font-face{font-family:Vazir;src:url(/app/vazir.ttf)}@font-face{font-family:Vazir;font-weight:700;src:url(/app/vazir-bold.ttf)}
+:root{--bg:#0b1020;--s:#151b2e;--t:#e2e8f0;--m:#94a3b8;--p:#6366f1}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--t);font-family:Vazir,Tahoma,sans-serif;min-height:100vh}
+body{padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 20px)}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 2px 4px}
+h1{margin:0;font-size:28px;background:linear-gradient(90deg,#a78bfa,#67e8f9);-webkit-background-clip:text;color:transparent}
+.chip{background:var(--s);border:0;color:var(--t);border-radius:999px;padding:8px 14px;font:inherit;font-size:13px}
+.orbWrap{display:flex;justify-content:center;margin:26px 0 10px}
+#orb{width:170px;height:170px;border-radius:50%;border:0;background:radial-gradient(circle at 35% 30%,#a78bfa,#4f46e5 55%,#06b6d4);
+ box-shadow:0 0 0 0 rgba(99,102,241,.5),0 20px 60px rgba(79,70,229,.45);display:flex;align-items:center;justify-content:center;transition:transform .15s}
+#orb svg{width:62px;height:62px}#orb.listen{animation:pulse 1.2s infinite}#orb:active{transform:scale(.96)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(103,232,249,.55),0 20px 60px rgba(79,70,229,.45)}100%{box-shadow:0 0 0 36px rgba(103,232,249,0),0 20px 60px rgba(79,70,229,.45)}}
+#status{text-align:center;color:var(--m);min-height:24px}#heard{text-align:center;font-size:18px;font-weight:700;min-height:28px;margin-top:4px}
+.card{background:var(--s);border-radius:20px;padding:16px;margin-top:14px}
+#reply{font-size:16px;line-height:1.9;white-space:pre-wrap}#reply a{color:#67e8f9}
+.row{display:flex;gap:8px}input{flex:1;background:#0f1528;border:1px solid #2a3350;color:var(--t);border-radius:14px;padding:12px;font:inherit;font-size:16px}
+.btn{background:var(--p);color:#fff;border:0;border-radius:14px;padding:12px 16px;font:inherit;font-weight:700}
+.btn.alt{background:#334155}.muted{color:var(--m);font-size:13px;line-height:1.8}
+.ex{display:flex;flex-wrap:wrap;gap:8px}.ex button{background:#1e2640;border:0;color:var(--t);border-radius:12px;padding:8px 12px;font:inherit;font-size:13px}
+#ad{position:fixed;inset:0;background:rgba(5,8,20,.96);display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;z-index:9;text-align:center}
+#ad img,#ad video{max-width:100%;max-height:45vh;border-radius:16px}#ad h2{margin:14px 0 4px}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;z-index:8}.sheet>div{background:var(--s);width:100%;border-radius:24px 24px 0 0;padding:20px 18px calc(env(safe-area-inset-bottom) + 20px);max-height:85vh;overflow:auto}
+.code{font-size:34px;font-weight:700;letter-spacing:6px;text-align:center;direction:ltr;background:linear-gradient(135deg,#7c3aed,#4f46e5,#06b6d4);border-radius:18px;padding:16px;margin:10px 0}
+.plan{display:flex;justify-content:space-between;align-items:center;background:#1e2640;border-radius:14px;padding:12px 14px;margin-top:8px}
+#install{display:none}
+</style>
+</head>
+<body>
+<header><h1>ناوا</h1><div><button class="chip" onclick="openSheet('pro')">پرو ✦</button> <button class="chip" onclick="openSheet('invite')">دعوت 🎁</button> <button class="chip" onclick="openSheet('settings')">⚙︎</button></div></header>
+<div class="muted">دستیار صوتی فارسی · نسخه‌ی آیفون و وب</div>
+
+<div class="card" id="install"><b>ناوا را روی صفحه‌ی اصلی بگذارید</b><div class="muted">در سافاری دکمه‌ی «اشتراک‌گذاری» ⬆︎ را بزنید، بعد «Add to Home Screen».</div></div>
+<div class="card" id="ann" style="display:none"></div>
+
+<div class="orbWrap"><button id="orb" aria-label="صحبت کنید"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg></button></div>
+<div id="status">برای صحبت، روی گوی بزنید</div>
+<div id="heard"></div>
+
+<div class="card"><div id="reply">درود! من دریا هستم و آماده‌ی فرمان شما هستم. بگو «هوای تهران چطوره؟»، «ساعت چنده؟»، «به ۰۹۱۲۱۲۳۴۵۶۷ زنگ بزن» یا هر سؤالی داری.</div></div>
+
+<div class="card"><div class="row"><input id="txt" placeholder="یا فرمان را بنویسید…" enterkeyhint="go"><button class="btn" onclick="runTyped()">اجرا</button></div>
+<div class="ex" style="margin-top:12px">
+ <button>ساعت چنده</button><button>امروز چندمه</button><button>هوای تهران</button><button>حافظ کی بود</button><button>۲۳۵ ضربدر ۱۲</button><button>یه جوک بگو</button><button>مسیر تا میدان آزادی</button><button>خلاصه روز</button>
+</div></div>
+<div class="card muted">در آیفون، اپل اجازه نمی‌دهد برنامه‌ای گوشی را کنترل کند؛ برای تماس، پیامک و واتساپ، ناوا همه‌چیز را آماده می‌کند و شما فقط «ارسال» یا «تماس» را می‌زنید.<br>نسخه‌ی ویندوز به‌زودی ✦</div>
+
+<div id="ad"><div class="muted">تبلیغ</div><div id="adMedia"></div><h2 id="adTitle"></h2><div id="adBody" class="muted"></div>
+ <div class="row" style="margin-top:18px"><button class="btn alt" id="adCta">بیشتر ببینید</button><button class="btn" id="adSkip" disabled>۵</button></div></div>
+
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()"><div id="sheetBody"></div></div>
+
+<script>
+// ---------------------------------------------------------------- وضعیت
+const $=id=>document.getElementById(id);
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem('nava_'+k))??d}catch{return d}},set:(k,v)=>localStorage.setItem('nava_'+k,JSON.stringify(v))};
+const dev=LS.get('device')||(()=>{const d=crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+Date.now();LS.set('device',d);return d})();
+const code=(()=>{const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let h=0;for(const ch of dev)h=(h*31+ch.charCodeAt(0))>>>0;let s='';for(let i=0;i<6;i++){s+=a[h%a.length];h=Math.floor(h/a.length)^(i*2654435761>>>0)}return s})();
+let CFG=LS.get('cfg',{}),ME=LS.get('me',{}),counter=LS.get('counter',0);
+const st=()=>({persona:LS.get('persona','darya'),city:LS.get('city','تهران'),voice:LS.get('voice',true),rate:LS.get('rate',0)});
+const name=()=>st().persona==='payam'?'پیام':'دریا';
+const fa=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+const isPro=()=>Date.now()<(ME.pro_until||0)||(ME.invited||0)>=(CFG.pro_invites||5);
+const adFree=()=>Date.now()<(ME.pro_until||0)||Date.now()<(ME.ad_free_until||0);
+const api=(p,b)=>fetch(p,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{}).then(r=>r.ok?r.json():null).catch(()=>null);
+
+async function sync(){const c=await api('/api/config?device='+encodeURIComponent(dev)+'&v=300');if(c){CFG=c;LS.set('cfg',c)}
+ const m=await api('/api/me',{device:dev,code});if(m){ME=m;LS.set('me',m)}
+ const a=CFG.announcement;if(a&&a.active&&a.text&&LS.get('annSeen')!==a.id){$('ann').style.display='block';$('ann').innerHTML=`<b>${esc(a.title)}</b><div class="muted">${esc(a.text)}</div>`+(a.url?`<a class="muted" href="${esc(a.url)}">بیشتر</a>`:'');$('ann').onclick=()=>{LS.set('annSeen',a.id);$('ann').style.display='none'}}}
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------------------------------------------------------------- گفتار
+let audio=new Audio();
+function say(text,html){$('reply').innerHTML=html||esc(text);if(!st().voice)return;
+ const url='/api/tts?voice='+st().persona+'&rate='+st().rate+'&text='+encodeURIComponent(text.slice(0,600));
+ audio.pause();audio=new Audio(url);audio.play().catch(()=>{try{const u=new SpeechSynthesisUtterance(text);u.lang='fa-IR';speechSynthesis.speak(u)}catch{}})}
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,listening=false;
+let greeted=false;
+$('orb').onclick=()=>{if(!greeted&&SR){greeted=true;const g=`درود، خوش آمدید! من ${name()} هستم و آماده‌ی فرمان شما هستم.`;say(g);
+  let t0=Date.now();const w=()=>{if(!audio.ended&&!audio.paused&&Date.now()-t0<9000)return setTimeout(w,300);if(/iP(hone|ad)/.test(navigator.userAgent)){$('status').textContent='بفرمایید؛ روی گوی بزنید و فرمان بدهید'}else $('orb').onclick2()};audio.onerror=()=>{};setTimeout(w,900);return}
+ $('orb').onclick2()};
+$('orb').onclick2=()=>{if(!SR){say('متأسفم، این مرورگر تشخیص گفتار ندارد. باید ناوا را در سافاری (آیفون) یا کروم باز کنید تا فرمان صوتی کار کند. فعلاً می‌توانید فرمان را بنویسید.');return}
+ if(listening){rec&&rec.stop();return}
+ rec=new SR();rec.lang='fa-IR';rec.interimResults=true;rec.maxAlternatives=3;
+ rec.onstart=()=>{listening=true;$('orb').classList.add('listen');$('status').textContent='گوش می‌دهم…';audio.pause()};
+ rec.onend=()=>{listening=false;$('orb').classList.remove('listen');$('status').textContent='برای صحبت، روی گوی بزنید'};
+ rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed')say('متأسفم، اجازه‌ی میکروفون داده نشده. باید در تنظیمات آیفون، بخش Safari، گزینه‌ی Microphone را روی Allow بگذارید تا فرمانتان اجرا شود.');
+  else if(e.error==='network')say('متأسفم، اینترنت وصل نیست. باید وای‌فای یا داده‌ی همراه را روشن کنید تا فرمانتان اجرا شود.')};
+ rec.onresult=e=>{const r=e.results[e.results.length-1];$('heard').textContent=r[0].transcript;if(r.isFinal){const alts=[...r].map(x=>x.transcript);run(alts[0],alts)}};
+ try{rec.start()}catch{}};
+function runTyped(){const v=$('txt').value.trim();if(v){$('heard').textContent=v;$('txt').value='';run(v)}}
+$('txt').addEventListener('keydown',e=>{if(e.key==='Enter')runTyped()});
+document.querySelectorAll('.ex button').forEach(b=>b.onclick=()=>{$('heard').textContent=b.textContent;run(b.textContent)});
+
+// ---------------------------------------------------------------- فهم فرمان
+function norm(s){return s.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[آأإ]/g,'ا').replace(/\u200c/g,' ')
+ .replace(/[؟?!.،,]/g,' ').replace(/\s+/g,' ').trim().replace(/^(سلام |هی )?(دریا|پیام|ناوا)( جان)? /,'').replace(/^(لطفا|میشه|میتونی|برام|خب) /,'').trim()}
+const has=(s,...w)=>w.some(x=>s.includes(x));
+function parse(s){
+ for(const c of CFG.custom_commands||[]){if(c.active===false)continue;for(const p of c.phrases||[]){const n=norm(p);if(n&&(c.match==='exact'?s===n:s.includes(n)))return{t:'custom',c}}}
+ let m;
+ if(has(s,'خلاصه روز','خلاصه امروز','امروز چه خبر')||s==='صبح بخیر')return{t:'brief'};
+ if(m=s.match(/^(?:به )?(\+?\d[\d ]{2,})(?: ?(?:زنگ بزن|تماس بگیر|زنگ))/))return{t:'call',n:m[1].replace(/ /g,'')};
+ if(m=s.match(/^(?:زنگ بزن|تماس بگیر)(?: به)? (\+?\d[\d ]{2,})/))return{t:'call',n:m[1].replace(/ /g,'')};
+ if(m=s.match(/(?:به )?(.+?) (?:زنگ بزن|تماس بگیر)$/))return{t:'callName',who:m[1]};
+ if(m=s.match(/(?:به )?(.+?) واتساپ (?:بده|بزن|بفرست)(?: که)?(?: (.*))?$/)||s.match(/^واتساپ (?:بده |بفرست )?(?:به )?(\S+)(?: که)?(?: (.*))?$/))return{t:'wa',who:m[1],body:m[2]||''};
+ if(m=s.match(/(?:پیامک|پیام|اس ام اس) (?:بده|بفرست)(?: به)? (\S+)(?: که| بگو)?:? ?(.*)$/)||s.match(/(?:به )?(\S+) (?:پیامک|پیام|اس ام اس) (?:بده|بفرست)(?: که)?:? ?(.*)$/))return{t:'sms',who:m[1],body:m[2]||''};
+ if(m=s.match(/^(?:مسیر|مسیریابی|برو به|راه)(?: تا| به)? (.+)$/))return{t:'nav',q:m[1]};
+ if(m=s.match(/^(?:یوتیوب|تو یوتیوب) (.+?)(?: رو)?(?: پیدا کن| سرچ کن| بیار)?$/))return{t:'yt',q:m[1]};
+ if(m=s.match(/^(?:جستجو کن|سرچ کن|گوگل کن|بگرد)(?: دنبال)? (.+)$/)||s.match(/^(.+?) (?:رو )?(?:جستجو کن|سرچ کن|گوگل کن)$/))return{t:'search',q:m[1]};
+ if(has(s,'ساعت چنده','ساعت چند است','چه ساعتیه','الان ساعت'))return{t:'time'};
+ if(has(s,'امروز چندمه','تاریخ امروز','امروز چه روزیه','چندم ماهه'))return{t:'date'};
+ if(has(s,'جوک','لطیفه','بخندون'))return{t:'joke'};
+ if(has(s,'شیر یا خط'))return{t:'coin'};if(has(s,'تاس'))return{t:'dice'};
+ if(has(s,'اسمت چیه','تو کی هستی','کی هستی'))return{t:'who'};
+ if(has(s,'هوا','آب و هوا','اب و هوا','دما','بارون میاد','برف میاد'))return{t:'weather',city:cityOf(s)};
+ const ex=calcExpr(s);if(ex!==null)return{t:'calc',v:ex};
+ if(has(s,'راهنما','چیکار میتونی','چه کارهایی'))return{t:'help'};
+ return{t:'ask',q:s}}
+function cityOf(s){const m=s.replace(/(آب و هوا|اب و هوا|هوای|هوا|دمای|دما|امروز|فردا|چطوره|چطور است|چنده|چقدره|بارون میاد|برف میاد|در|تو)/g,' ').replace(/\s+/g,' ').trim();return m||st().city}
+function calcExpr(s){let e=s.replace(/چند میشه|چند می شه|چقدر میشه|مساوی|میشه|حساب کن|چنده/g,'').replace(/ضربدر|ضرب در|در (?=\d)/g,'*').replace(/تقسیم بر/g,'/').replace(/به اضافه|بعلاوه|با|جمع/g,'+').replace(/منهای|منها/g,'-').replace(/×/g,'*').replace(/÷/g,'/').replace(/\s/g,'');
+ if(!/^[\d.+\-*/()]+$/.test(e)||!/\d[+\-*/]\d/.test(e))return null;try{const v=Function('"use strict";return('+e+')')();return isFinite(v)?Math.round(v*1e6)/1e6:null}catch{return null}}
+
+// ---------------------------------------------------------------- اجرا
+const emergency=['110','112','115','125','123','129','113','1480','911'];
+async function run(raw,alts){const s=norm(raw);if(!s)return;const c=parse(s);
+ api('/api/events',{device:dev,type:'command',kind:'web_'+c.t,len:raw.length});
+ const comm=['call','callName','wa','sms'].includes(c.t)&&!(c.t==='call'&&emergency.includes(c.n));
+ if(comm&&await maybeAd())return pending=c;
+ exec(c)}
+let pending=null;
+function exec(c){const now=new Date();
+ switch(c.t){
+ case 'time':return say(`ساعت ${now.getHours()} و ${now.getMinutes()} دقیقه است.`);
+ case 'date':return say('امروز '+new Intl.DateTimeFormat('fa-IR-u-ca-persian',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(now)+' است.');
+ case 'joke':{const j=(CFG.jokes&&CFG.jokes.length?CFG.jokes:['می‌دونی چرا کامپیوتر سرما نمی‌خوره؟ چون ویندوزش همیشه بسته است!','به ماهی می‌گن چرا حرف نمی‌زنی؟ می‌گه دهنم پر آبه!']);return say(j[Math.floor(Math.random()*j.length)])}
+ case 'coin':return say(Math.random()<.5?'شیر آمد!':'خط آمد!');
+ case 'dice':return say('تاس '+(1+Math.floor(Math.random()*6))+' آمد.');
+ case 'who':return say(`من ${name()} هستم، دستیار صوتی فارسی ناوا.`);
+ case 'help':return say('می‌توانم ساعت و تاریخ بگویم، هوا را بگویم، حساب کنم، به سؤال‌ها جواب بدهم، تماس، پیامک و واتساپ را آماده کنم، مسیریابی و جستجو کنم.');
+ case 'calc':return say('می‌شود '+c.v+'.',`= <b>${fa(c.v)}</b>`);
+ case 'call':say('در حال تماس با '+fa(c.n)+'…');return go('tel:'+c.n);
+ case 'callName':return say(`متأسفم، در آیفون اپل اجازه نمی‌دهد ناوا مخاطب‌ها را بخواند. باید شماره را بگویید، مثلاً «به ۰۹۱۲۱۲۳۴۵۶۷ زنگ بزن»، یا بگویید «هی سیری، به ${c.who} زنگ بزن».`);
+ case 'sms':{const n=/^\+?\d+$/.test(c.who)?c.who:'';say(n?'پیامک آماده است؛ فقط «ارسال» را بزنید.':'پیامک آماده است؛ گیرنده را انتخاب و «ارسال» را بزنید.');return go(`sms:${n}${/iP(hone|ad)/.test(navigator.userAgent)?'&':'?'}body=${encodeURIComponent(c.body)}`)}
+ case 'wa':{let n=/^\+?\d+$/.test(c.who)?c.who.replace(/^0/,'98').replace('+',''):'';say('پیام واتساپ آماده است؛ «ارسال» را بزنید.');return go('https://wa.me/'+n+'?text='+encodeURIComponent(c.body))}
+ case 'nav':say('مسیریابی تا '+c.q);return go(/iP(hone|ad)/.test(navigator.userAgent)?'https://maps.apple.com/?daddr='+encodeURIComponent(c.q):'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(c.q));
+ case 'yt':say('در یوتیوب: '+c.q);return go('https://www.youtube.com/results?search_query='+encodeURIComponent(c.q));
+ case 'search':say('جستجو برای '+c.q);return go('https://www.google.com/search?q='+encodeURIComponent(c.q));
+ case 'custom':{const x=c.c;if(x.action==='url')go(x.value);if(x.action==='command')return run(x.value);return say(x.reply||x.value||'انجام شد.')}
+ case 'weather':return weather(c.city).then(w=>say(w||'متأسفم، هوای '+c.city+' را پیدا نکردم.'));
+ case 'brief':return brief();
+ case 'ask':return ask(c.q);}}
+function go(u){setTimeout(()=>{location.href=u},700)}
+function online(){if(!navigator.onLine){say('متأسفم، گوشی به اینترنت وصل نیست. باید وای‌فای یا داده‌ی همراه را روشن کنید تا فرمانتان اجرا شود.');return false}return true}
+
+const WC={0:'آسمان صاف',1:'تقریباً صاف',2:'کمی ابری',3:'ابری',45:'مه',48:'مه',51:'نم‌نم باران',53:'نم‌نم باران',55:'نم‌نم باران',61:'باران سبک',63:'باران',65:'باران شدید',71:'برف سبک',73:'برف',75:'برف سنگین',80:'رگبار',81:'رگبار',82:'رگبار شدید',95:'رعد و برق',96:'رعد و برق',99:'رعد و برق'};
+async function weather(city){if(!online())return null;
+ const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=fa&name='+encodeURIComponent(city)).then(r=>r.json()).catch(()=>null);const p=g&&g.results&&g.results[0];if(!p)return null;
+ const w=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`).then(r=>r.json()).catch(()=>null);if(!w)return null;
+ const t=Math.round(w.current.temperature_2m),d=w.daily;return `هوای ${p.name} الان ${WC[w.current.weather_code]||''} و ${t} درجه است. بیشینه‌ی امروز ${Math.round(d.temperature_2m_max[0])} و کمینه ${Math.round(d.temperature_2m_min[0])} درجه، احتمال بارش ${d.precipitation_probability_max[0]??0} درصد.`}
+async function brief(){if(!isPro()){say('متأسفم، خلاصه‌ی روز مخصوص ناوا پرو است. باید اشتراک بگیرید یا ۵ دوست دعوت کنید تا فرمانتان اجرا شود.');return openSheet('pro')}
+ const now=new Date(),h=now.getHours(),g=h<12?'صبح بخیر':h<17?'ظهر بخیر':h<21?'عصر بخیر':'شب بخیر';
+ say('یک لحظه…');const w=await weather(st().city);say(`${g}! امروز ${new Intl.DateTimeFormat('fa-IR-u-ca-persian',{weekday:'long',day:'numeric',month:'long'}).format(now)} است. ${w||''}`)}
+async function ask(q){if(!online())return;say('یک لحظه…');
+ const s=await api('/api/ask?q='+encodeURIComponent(q));if(s&&s.text)return say(s.text,esc(s.text)+(s.url?`<br><a href="${esc(s.url)}">بیشتر</a>`:''));
+ const W='https://fa.wikipedia.org';const r=await fetch(W+'/w/api.php?action=query&list=search&srlimit=1&format=json&origin=*&srsearch='+encodeURIComponent(q.replace(/(کی بود|کیه|چیه|کجاست|چی هست|درباره|بگو)/g,''))).then(r=>r.json()).catch(()=>null);
+ const t=r&&r.query.search[0]&&r.query.search[0].title;
+ if(t){const sm=await fetch(W+'/api/rest_v1/page/summary/'+encodeURIComponent(t)).then(r=>r.json()).catch(()=>null);
+  if(sm&&sm.extract){const tx=sm.extract.split(/(?<=[.!؟])\s/).slice(0,3).join(' ');return say(tx,`<b>${esc(sm.title)}</b><br>${esc(tx)}<br><a href="${esc(sm.content_urls?.mobile?.page||'')}">ویکی‌پدیا</a>`)}}
+ say('جواب دقیقی پیدا نکردم؛ در اینترنت جستجو می‌کنم.');go('https://www.google.com/search?q='+encodeURIComponent(q))}
+
+// ---------------------------------------------------------------- تبلیغ
+async function maybeAd(){if(!CFG.ads_enabled||adFree())return false;counter++;LS.set('counter',counter);if(counter%Math.max(1,CFG.ad_every_n||1))return false;
+ const r=await api('/api/ads/next?device='+encodeURIComponent(dev));const ad=r&&r.ad;if(!ad)return false;
+ $('adTitle').textContent=ad.title||'';$('adBody').textContent=ad.body||'';$('adCta').textContent=ad.cta||'بیشتر ببینید';
+ $('adMedia').innerHTML=ad.video_url?`<video src="${esc(ad.video_url)}" autoplay muted playsinline></video>`:ad.image_url?`<img src="${esc(ad.image_url)}">`:'';
+ $('ad').style.display='flex';api('/api/ads/'+ad.id+'/impression',{device:dev});say('یک تبلیغ کوتاه، بعدش انجام می‌دهم.');
+ $('adCta').onclick=()=>{api('/api/ads/'+ad.id+'/click',{device:dev});if(ad.click_url)window.open(ad.click_url,'_blank')};
+ let sec=Math.min(30,Math.max(3,ad.duration||CFG.ad_skip_seconds||5));const b=$('adSkip');b.disabled=true;b.textContent=fa(sec);
+ const iv=setInterval(()=>{sec--;if(sec<=0){clearInterval(iv);b.disabled=false;b.textContent='ادامه ←'}else b.textContent=fa(sec)},1000);
+ b.onclick=()=>{$('ad').style.display='none';api('/api/ads/'+ad.id+'/complete',{device:dev});const p=pending;pending=null;if(p)exec(p)};
+ return true}
+
+// ---------------------------------------------------------------- برگه‌ها
+function openSheet(k){const b=$('sheetBody');
+ if(k==='invite'){const need=CFG.pro_invites||5,days=CFG.referral_days||3,done=Math.min(ME.invited||0,need);
+  b.innerHTML=`<h2>دعوت دوستان 🎁</h2><div class="code">${code}</div><div class="muted">هر دوستی که با کد تو نصب کند: ${fa(days)} روز بدون تبلیغ برای هر دو نفر. با ${fa(need)} دعوت، ناوا پرو باز می‌شود. پیشرفت: ${fa(done)} از ${fa(need)}</div>
+  <button class="btn" style="width:100%;margin-top:12px" id="shareB">ارسال دعوت‌نامه</button>
+  ${ME.referred_by?'':`<div class="row" style="margin-top:14px"><input id="refIn" placeholder="کد دعوت دوستت" style="direction:ltr;text-align:center"><button class="btn alt" id="refB">ثبت</button></div>`}<div id="refMsg" class="muted"></div>`;
+  $('shareB').onclick=()=>{const t=`من از «ناوا» استفاده می‌کنم؛ دستیار صوتی فارسی. با کد دعوت ${code} نصب کن تا ${fa(days)} روز بدون تبلیغ هدیه بگیری.`+(CFG.download_url?'\n'+CFG.download_url:'\n'+location.origin+'/app/');navigator.share?navigator.share({text:t}).catch(()=>{}):navigator.clipboard.writeText(t).then(()=>$('refMsg').textContent='متن دعوت کپی شد.')};
+  $('refB')&&($('refB').onclick=async()=>{const v=$('refIn').value.trim().toUpperCase();if(v===code)return $('refMsg').textContent='کد خودت را نمی‌شود ثبت کرد 🙂';const r=await api('/api/referral/claim',{device:dev,code:v});$('refMsg').textContent=r?r.message:'متأسفم، سرور در دسترس نیست.';sync()})}
+ if(k==='pro'){const plans=CFG.plans||[];const until=ME.pro_until>Date.now()?new Intl.DateTimeFormat('fa-IR').format(new Date(ME.pro_until)):'';
+  b.innerHTML=`<h2>ناوا پرو ✦</h2>${until?`<div class="code" style="font-size:18px;letter-spacing:0">فعال تا ${until}</div>`:''}
+  <div class="muted">🚫 بدون هیچ تبلیغی · 🗞 خلاصه‌ی روز · ⚡ میانبرهای صوتی نامحدود (اندروید) · 🫧 حباب شناور (اندروید) · ✏️ اسم دلخواه دستیار</div>
+  ${plans.map(p=>`<div class="plan"><div><b>${esc(p.title)}</b> <span class="muted">${esc(p.badge||'')}</span><div class="muted">${fa(Number(p.price).toLocaleString('en'))} تومان</div></div><button class="btn" data-plan="${esc(p.id)}">خرید</button></div>`).join('')}
+  <div class="row" style="margin-top:14px"><input id="codeIn" placeholder="کد فعال‌سازی" style="direction:ltr"><button class="btn alt" id="codeB">فعال‌سازی</button></div><div id="proMsg" class="muted"></div>`;
+  b.querySelectorAll('[data-plan]').forEach(x=>x.onclick=()=>{if(!CFG.payment_enabled)return $('proMsg').textContent='پرداخت اینترنتی به‌زودی فعال می‌شود. فعلاً با کد فعال‌سازی یا دعوت دوستان.';location.href='/pay/start?device='+encodeURIComponent(dev)+'&plan='+encodeURIComponent(x.dataset.plan)});
+  $('codeB').onclick=async()=>{const r=await api('/api/pro/activate',{device:dev,code:$('codeIn').value});$('proMsg').textContent=r?r.message:'متأسفم، سرور در دسترس نیست.';sync()}}
+ if(k==='settings'){const s=st();
+  b.innerHTML=`<h2>تنظیمات</h2><div class="muted">دستیار</div><div class="row"><button class="btn ${s.persona==='darya'?'':'alt'}" data-p="darya">دریا (زن)</button><button class="btn ${s.persona==='payam'?'':'alt'}" data-p="payam">پیام (مرد)</button></div>
+  <div class="muted" style="margin-top:12px">شهر من</div><input id="cityIn" value="${esc(s.city)}">
+  <div class="muted" style="margin-top:12px">سرعت گفتار</div><input id="rateIn" type="range" min="-30" max="50" step="10" value="${s.rate}">
+  <label class="muted" style="display:flex;gap:8px;margin-top:12px"><input type="checkbox" id="voiceIn" ${s.voice?'checked':''} style="flex:0">پاسخ صوتی</label>
+  <div class="muted" style="margin-top:12px">زبان: فارسی · کوردی (سۆرانی و کرمانجی) به‌زودی</div>
+  <button class="btn" style="width:100%;margin-top:14px" id="saveS">ذخیره</button>`;
+  b.querySelectorAll('[data-p]').forEach(x=>x.onclick=()=>{LS.set('persona',x.dataset.p);openSheet('settings')});
+  $('saveS').onclick=()=>{LS.set('city',$('cityIn').value.trim()||'تهران');LS.set('rate',+$('rateIn').value);LS.set('voice',$('voiceIn').checked);closeSheet();say(`ذخیره شد. من ${name()} هستم.`)}}
+ $('sheet').style.display='flex'}
+function closeSheet(){$('sheet').style.display='none'}
+
+// ---------------------------------------------------------------- راه‌اندازی
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/app/sw.js',{scope:'/app/'});
+if(/iP(hone|ad)/.test(navigator.userAgent)&&!navigator.standalone)$('install').style.display='block';
+sync().then(()=>{if(CFG.welcome)say(CFG.welcome)});
+</script>
+</body>
+</html>

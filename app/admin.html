@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>پنل ناوا</title>
+<link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet">
+<style>
+:root{--p:#4f46e5;--bg:#0b1020;--s:#151b2e;--t:#e2e8f0;--m:#94a3b8}
+*{box-sizing:border-box}body{margin:0;font-family:Vazirmatn,Tahoma,sans-serif;background:var(--bg);color:var(--t)}
+header{background:linear-gradient(135deg,#7c3aed,#4f46e5,#06b6d4);padding:18px 20px;font-size:22px;font-weight:800}
+nav{display:flex;gap:6px;padding:10px 16px;flex-wrap:wrap}nav button{background:var(--s);color:var(--t);border:0;border-radius:12px;padding:10px 16px;font:inherit;cursor:pointer}
+nav button.on{background:var(--p)}main{padding:0 16px 40px;max-width:1000px;margin:auto}
+.card{background:var(--s);border-radius:18px;padding:16px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.stat{background:#1e2640;border-radius:14px;padding:14px}.stat b{display:block;font-size:26px}.stat span{color:var(--m);font-size:13px}
+label{display:block;margin:10px 0 4px;color:var(--m);font-size:13px}input,textarea,select{width:100%;background:#0f1528;color:var(--t);border:1px solid #2a3350;border-radius:10px;padding:9px;font:inherit}
+textarea{min-height:90px;direction:rtl}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
+.btn{background:var(--p);color:#fff;border:0;border-radius:12px;padding:10px 18px;font:inherit;cursor:pointer;margin-top:12px}.btn.alt{background:#334155}.btn.red{background:#b91c1c}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid #2a3350;text-align:right}
+.chk{display:flex;align-items:center;gap:8px;margin:8px 0}.chk input{width:auto}.muted{color:var(--m);font-size:13px}.hide{display:none}
+#toast{position:fixed;bottom:20px;left:20px;background:#16a34a;color:#fff;padding:12px 18px;border-radius:12px;display:none}
+code{direction:ltr;display:inline-block}
+</style>
+</head>
+<body>
+<header>🎙 پنل مدیریت ناوا</header>
+<nav>
+ <button data-t="stats" class="on">آمار</button><button data-t="general">تنظیمات کلی</button><button data-t="money">تبلیغ و اشتراک</button><button data-t="cardpay">پرداخت‌های کارتی</button>
+ <button data-t="ads">تبلیغ‌ها</button><button data-t="codes">کدهای پرو</button><button data-t="content">محتوا و فرمان‌ها</button><button data-t="raw">JSON خام</button>
+</nav>
+<main>
+<section id="stats"><div class="card"><div class="grid" id="statGrid"></div></div>
+ <div class="card"><h3>پرکاربردترین فرمان‌ها (۷ روز)</h3><table id="kinds"></table></div>
+ <div class="card"><h3>پرداخت‌های اخیر</h3><table id="pays"></table></div></section>
+
+<section id="general" class="hide"><div class="card">
+ <h3>اعلان داخل برنامه</h3>
+ <div class="chk"><input type="checkbox" id="ann_active"><span>فعال</span></div>
+ <label>عنوان</label><input id="ann_title"><label>متن</label><textarea id="ann_text"></textarea><label>لینک (اختیاری)</label><input id="ann_url" dir="ltr">
+ <h3>آپدیت</h3>
+ <div class="row"><div><label>آخرین versionCode</label><input id="up_latest" type="number"></div><div><label>حداقل نسخه‌ی مجاز (اجباری)</label><input id="up_min" type="number"></div></div>
+ <label>لینک دانلود نسخه‌ی تازه</label><input id="up_url" dir="ltr"><label>پیام آپدیت</label><input id="up_msg">
+ <h3>عمومی</h3><label>پیام خوش‌آمد</label><input id="welcome"><label>لینک دانلود برنامه (برای دعوت‌نامه)</label><input id="download_url" dir="ltr">
+ <label>لینک پشتیبانی</label><input id="support_url" dir="ltr">
+ <h3>پرچم ویژگی‌ها</h3><div id="features"></div>
+ <button class="btn" onclick="saveGeneral()">ذخیره</button></div></section>
+
+<section id="money" class="hide"><div class="card">
+ <h3>تبلیغ</h3><div class="chk"><input type="checkbox" id="ads_enabled"><span>نمایش تبلیغ قبل از تماس/پیام</span></div>
+ <div class="row"><div><label>هر چند فرمان یک تبلیغ</label><input id="ad_every_n" type="number" min="1"></div><div><label>ثانیه تا امکان رد کردن</label><input id="ad_skip_seconds" type="number"></div></div>
+ <h3>دعوت دوستان</h3><div class="row"><div><label>روز بدون تبلیغ برای هر دعوت</label><input id="referral_days" type="number"></div><div><label>دعوت لازم برای پرو</label><input id="pro_invites" type="number"></div></div>
+ <h3>اشتراک ناوا پرو</h3><div class="chk"><input type="checkbox" id="payment_enabled"><span>پرداخت اینترنتی روشن باشد</span></div>
+ <p class="muted" id="zpInfo"></p>
+ <h3>کارت‌به‌کارت (بدون درگاه)</h3><div class="row"><div><label>شماره کارت دریافت</label><input id="card_number" dir="ltr"></div><div><label>به نام</label><input id="card_holder"></div></div>
+ <label>شماره شبا (پایا/ساتنا)</label><input id="sheba" dir="ltr">
+ <p class="muted">اگر شماره کارت پر باشد و درگاه خاموش، کاربران با کارت‌به‌کارت می‌خرند و شما در تب «پرداخت‌های کارتی» تأیید می‌کنید.</p>
+ <h3>مغز هوش مصنوعی</h3><label>آدرس سازگار با OpenAI (خالی = پیش‌فرض)</label><input id="ai_endpoint" dir="ltr">
+ <table id="plansTbl"></table><button class="btn alt" onclick="addPlan()">+ طرح</button>
+ <br><button class="btn" onclick="saveMoney()">ذخیره</button></div></section>
+
+<section id="cardpay" class="hide"><div class="card"><h3>پرداخت‌های کارت‌به‌کارت</h3>
+ <p class="muted">بعد از دیدن واریز در حساب بانکی، «تأیید» را بزنید تا اشتراک کاربر خودکار فعال شود.</p>
+ <table id="manualTbl"></table></div></section>
+
+<section id="ads" class="hide"><div class="card"><h3>تبلیغ تازه / ویرایش</h3>
+ <input type="hidden" id="ad_id"><div class="row"><div><label>تبلیغ‌دهنده</label><input id="ad_advertiser"></div><div><label>عنوان</label><input id="ad_title"></div></div>
+ <label>متن</label><textarea id="ad_body"></textarea>
+ <div class="row"><div><label>دکمه</label><input id="ad_cta" placeholder="بیشتر ببینید"></div><div><label>لینک کلیک</label><input id="ad_click_url" dir="ltr"></div></div>
+ <div class="row"><div><label>لینک عکس</label><input id="ad_image_url" dir="ltr"></div><div><label>لینک ویدیو (mp4)</label><input id="ad_video_url" dir="ltr"></div></div>
+ <div class="row"><div><label>مدت (ثانیه)</label><input id="ad_duration" type="number" value="5"></div><div><label>وزن نمایش</label><input id="ad_weight" type="number" value="1"></div><div><label>سقف نمایش (۰=بی‌نهایت)</label><input id="ad_budget_impressions" type="number" value="0"></div></div>
+ <div class="chk"><input type="checkbox" id="ad_active" checked><span>فعال</span></div>
+ <button class="btn" onclick="saveAd()">ذخیره‌ی تبلیغ</button> <button class="btn alt" onclick="clearAd()">جدید</button></div>
+ <div class="card"><table id="adsTbl"></table></div></section>
+
+<section id="codes" class="hide"><div class="card"><h3>ساخت کد فعال‌سازی پرو</h3>
+ <div class="row"><div><label>تعداد</label><input id="c_count" type="number" value="5"></div><div><label>روز</label><input id="c_days" type="number" value="30"></div><div><label>یادداشت</label><input id="c_note" placeholder="مثلاً فروش دستی"></div></div>
+ <button class="btn" onclick="makeCodes()">ساخت</button><pre id="newCodes" dir="ltr"></pre>
+ <h3>هدیه‌ی پرو به یک دستگاه</h3><div class="row"><div><label>شناسه‌ی دستگاه</label><input id="g_dev" dir="ltr"></div><div><label>روز</label><input id="g_days" type="number" value="30"></div></div>
+ <button class="btn alt" onclick="grant()">هدیه</button></div>
+ <div class="card"><table id="codesTbl"></table></div></section>
+
+<section id="content" class="hide"><div class="card">
+ <h3>فرمان‌های سفارشی</h3><p class="muted">عبارت‌ها با «،» جدا شوند. نوع: say (گفتن) / url (لینک) / app (باز کردن برنامه) / command (اجرای فرمان دیگر)</p>
+ <table id="cmdTbl"></table><button class="btn alt" onclick="addCmd()">+ فرمان</button>
+ <h3>پاسخ‌های آماده (موتور پاسخگو)</h3><table id="ansTbl"></table><button class="btn alt" onclick="addAns()">+ پاسخ</button>
+ <h3>جوک‌ها (هر خط یک جوک)</h3><textarea id="jokes" style="min-height:160px"></textarea>
+ <br><button class="btn" onclick="saveContent()">ذخیره</button></div></section>
+
+<section id="raw" class="hide"><div class="card"><p class="muted">ویرایش مستقیم همه‌ی تنظیمات. با احتیاط!</p>
+ <textarea id="rawJson" dir="ltr" style="min-height:420px;font-family:monospace"></textarea><button class="btn" onclick="saveRaw()">ذخیره</button></div></section>
+</main>
+<div id="toast"></div>
+<script>
+let C={};const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const api=async(u,m='GET',b)=>{const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});if(!r.ok)throw new Error(await r.text());return r.json()};
+const toast=t=>{$('toast').textContent=t;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2200)};
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+ document.querySelectorAll('main section').forEach(s=>s.classList.add('hide'));$(b.dataset.t).classList.remove('hide');({stats:loadStats,ads:loadAds,codes:loadCodes,cardpay:loadManual})[b.dataset.t]?.()});
+async function loadConfig(){C=await api('/admin/api/config');const a=C.announcement||{},u=C.update||{};
+ $('ann_active').checked=!!a.active;$('ann_title').value=a.title||'';$('ann_text').value=a.text||'';$('ann_url').value=a.url||'';
+ $('up_latest').value=u.latest_version||0;$('up_min').value=u.min_version||0;$('up_url').value=u.url||'';$('up_msg').value=u.message||'';
+ ['welcome','download_url','support_url','ad_every_n','ad_skip_seconds','referral_days','pro_invites','card_number','card_holder','sheba','ai_endpoint'].forEach(k=>$(k).value=C[k]??'');
+ $('ads_enabled').checked=!!C.ads_enabled;$('payment_enabled').checked=!!C.payment_enabled;
+ $('zpInfo').textContent=C._zarinpal_ready?'درگاه زرین‌پال آماده است.':'برای پرداخت اینترنتی، ZARINPAL_MERCHANT و PUBLIC_URL را در تنظیمات سرور بگذارید. تا آن موقع فقط کد فعال‌سازی کار می‌کند.';
+ $('features').innerHTML=Object.entries(C.features||{}).map(([k,v])=>`<div class="chk"><input type="checkbox" data-f="${esc(k)}" ${v?'checked':''}><span>${esc(k)}</span></div>`).join('');
+ renderPlans();renderCmds();renderAns();$('jokes').value=(C.jokes||[]).join('\n');$('rawJson').value=JSON.stringify(C,null,2)}
+async function put(){delete C._zarinpal_ready;await api('/admin/api/config','PUT',C);toast('ذخیره شد');await loadConfig()}
+function saveGeneral(){C.announcement={active:$('ann_active').checked,id:String(Date.now()),title:$('ann_title').value,text:$('ann_text').value,url:$('ann_url').value};
+ C.update={latest_version:+$('up_latest').value,min_version:+$('up_min').value,url:$('up_url').value,message:$('up_msg').value};
+ ['welcome','download_url','support_url'].forEach(k=>C[k]=$(k).value);document.querySelectorAll('[data-f]').forEach(x=>C.features[x.dataset.f]=x.checked);put()}
+function renderPlans(){$('plansTbl').innerHTML='<tr><th>شناسه</th><th>عنوان</th><th>قیمت (تومان)</th><th>روز</th><th>برچسب</th><th></th></tr>'+(C.plans||[]).map((p,i)=>
+ `<tr>${['id','title','price','days','badge'].map(k=>`<td><input data-p="${i}" data-k="${k}" value="${esc(p[k])}"></td>`).join('')}<td><button class="btn red" onclick="C.plans.splice(${i},1);renderPlans()">✕</button></td></tr>`).join('')}
+function readPlans(){document.querySelectorAll('[data-p]').forEach(x=>{const p=C.plans[x.dataset.p];p[x.dataset.k]=['price','days'].includes(x.dataset.k)?+x.value:x.value})}
+function addPlan(){readPlans();C.plans.push({id:'',title:'',price:0,days:30,badge:''});renderPlans()}
+function saveMoney(){readPlans();C.ads_enabled=$('ads_enabled').checked;C.payment_enabled=$('payment_enabled').checked;['ad_every_n','ad_skip_seconds','referral_days','pro_invites'].forEach(k=>C[k]=+$(k).value);['card_number','card_holder','sheba','ai_endpoint'].forEach(k=>C[k]=$(k).value.trim());put()}
+function renderCmds(){$('cmdTbl').innerHTML='<tr><th>عبارت‌ها</th><th>نوع</th><th>مقدار</th><th>پاسخ</th><th>فعال</th><th></th></tr>'+(C.custom_commands||[]).map((c,i)=>
+ `<tr><td><input data-c="${i}" data-k="phrases" value="${esc((c.phrases||[]).join('، '))}"></td><td><select data-c="${i}" data-k="action">${['say','url','app','command'].map(a=>`<option ${c.action==a?'selected':''}>${a}</option>`).join('')}</select></td>
+ <td><input data-c="${i}" data-k="value" value="${esc(c.value)}"></td><td><input data-c="${i}" data-k="reply" value="${esc(c.reply)}"></td><td><input type="checkbox" data-c="${i}" data-k="active" ${c.active!==false?'checked':''}></td>
+ <td><button class="btn red" onclick="readContent();C.custom_commands.splice(${i},1);renderCmds()">✕</button></td></tr>`).join('')}
+function renderAns(){$('ansTbl').innerHTML='<tr><th>وقتی پرسید (با «،»)</th><th>عنوان</th><th>جواب</th><th>لینک</th><th></th></tr>'+(C.answers||[]).map((a,i)=>
+ `<tr><td><input data-a="${i}" data-k="q" value="${esc((a.q||[]).join('، '))}"></td><td><input data-a="${i}" data-k="title" value="${esc(a.title)}"></td><td><input data-a="${i}" data-k="text" value="${esc(a.text)}"></td><td><input data-a="${i}" data-k="url" value="${esc(a.url)}"></td>
+ <td><button class="btn red" onclick="readContent();C.answers.splice(${i},1);renderAns()">✕</button></td></tr>`).join('')}
+const split=v=>v.split(/[،,]/).map(s=>s.trim()).filter(Boolean);
+function readContent(){C.custom_commands=C.custom_commands||[];C.answers=C.answers||[];
+ document.querySelectorAll('[data-c]').forEach(x=>{const c=C.custom_commands[x.dataset.c];const k=x.dataset.k;c[k]=k=='phrases'?split(x.value):k=='active'?x.checked:x.value});
+ document.querySelectorAll('[data-a]').forEach(x=>{const a=C.answers[x.dataset.a];const k=x.dataset.k;a[k]=k=='q'?split(x.value):x.value})}
+function addCmd(){readContent();C.custom_commands.push({phrases:[],action:'say',value:'',reply:'',active:true});renderCmds()}
+function addAns(){readContent();C.answers.push({q:[],title:'',text:'',url:''});renderAns()}
+function saveContent(){readContent();C.jokes=$('jokes').value.split('\n').map(s=>s.trim()).filter(Boolean);put()}
+function saveRaw(){try{C=JSON.parse($('rawJson').value);put()}catch(e){alert('JSON نامعتبر: '+e.message)}}
+async function loadStats(){const s=await api('/admin/api/stats');const L={devices:'کل نصب‌ها',active_1d:'فعال امروز',active_7d:'فعال ۷ روز',new_7d:'نصب تازه ۷ روز',pro_active:'پرو فعال',referrals:'دعوت موفق',commands_1d:'فرمان امروز',impressions_1d:'نمایش تبلیغ امروز',clicks_1d:'کلیک امروز',revenue_toman:'درآمد اشتراک (تومان)'};
+ $('statGrid').innerHTML=Object.entries(L).map(([k,t])=>`<div class="stat"><b>${(+s[k]).toLocaleString('fa-IR')}</b><span>${t}</span></div>`).join('');
+ $('kinds').innerHTML=s.top_kinds.map(k=>`<tr><td>${esc(k.kind)}</td><td>${k.n.toLocaleString('fa-IR')}</td></tr>`).join('')||'<tr><td class="muted">هنوز داده‌ای نیست</td></tr>';
+ $('pays').innerHTML=s.payments.map(p=>`<tr><td>${new Date(p.created).toLocaleString('fa-IR')}</td><td>${esc(p.plan)}</td><td>${(p.amount/10).toLocaleString('fa-IR')}</td><td>${esc(p.status)}</td><td dir="ltr">${esc(p.ref_id)}</td></tr>`).join('')||'<tr><td class="muted">پرداختی نیست</td></tr>'}
+let ADS=[];async function loadAds(){ADS=await api('/admin/api/ads');$('adsTbl').innerHTML='<tr><th>عنوان</th><th>تبلیغ‌دهنده</th><th>نمایش</th><th>کلیک</th><th>کامل</th><th>وضعیت</th><th></th></tr>'+ADS.map((a,i)=>
+ `<tr><td>${esc(a.title)}</td><td>${esc(a.advertiser)}</td><td>${a.impressions}</td><td>${a.clicks}</td><td>${a.completes}</td><td>${a.active?'فعال':'خاموش'}</td><td><button class="btn alt" onclick="editAd(${i})">ویرایش</button> <button class="btn red" onclick="delAd('${esc(a.id)}')">✕</button></td></tr>`).join('')}
+const AF=['id','advertiser','title','body','cta','click_url','image_url','video_url','duration','weight','budget_impressions'];
+function editAd(i){const a=ADS[i];AF.forEach(k=>$('ad_'+k).value=a[k]??'');$('ad_active').checked=!!a.active;scrollTo(0,0)}
+function clearAd(){AF.forEach(k=>$('ad_'+k).value='');$('ad_duration').value=5;$('ad_weight').value=1;$('ad_budget_impressions').value=0;$('ad_active').checked=true}
+async function saveAd(){const a={};AF.forEach(k=>a[k]=$('ad_'+k).value);a.active=$('ad_active').checked;await api('/admin/api/ads','POST',a);toast('تبلیغ ذخیره شد');clearAd();loadAds()}
+async function delAd(id){if(confirm('حذف شود؟')){await api('/admin/api/ads/'+id,'DELETE');loadAds()}}
+async function makeCodes(){const r=await api('/admin/api/codes','POST',{count:+$('c_count').value,days:+$('c_days').value,note:$('c_note').value});$('newCodes').textContent=r.codes.join('\n');loadCodes()}
+async function loadCodes(){const r=await api('/admin/api/codes');$('codesTbl').innerHTML='<tr><th>کد</th><th>روز</th><th>یادداشت</th><th>استفاده</th></tr>'+r.map(c=>`<tr><td dir="ltr">${esc(c.code)}</td><td>${c.days}</td><td>${esc(c.note)}</td><td>${c.used_by?'✓ '+new Date(c.used_at).toLocaleDateString('fa-IR'):'—'}</td></tr>`).join('')}
+async function grant(){await api('/admin/api/devices/'+encodeURIComponent($('g_dev').value.trim())+'/pro','POST',{days:+$('g_days').value});toast('هدیه داده شد')}
+const ST={pending:'در انتظار',approved:'تأیید شد',rejected:'رد شد'};
+async function loadManual(){const r=await api('/admin/api/manual');$('manualTbl').innerHTML='<tr><th>زمان</th><th>طرح</th><th>مبلغ (تومان)</th><th>۴ رقم آخر</th><th>کد پیگیری</th><th>دستگاه</th><th>وضعیت</th><th></th></tr>'+r.map(m=>`<tr><td>${new Date(m.created).toLocaleString('fa-IR')}</td><td>${esc(m.plan)}</td><td>${(+m.amount).toLocaleString('fa-IR')}</td><td dir="ltr">${esc(m.last4)}</td><td dir="ltr">${esc(m.ref)}</td><td dir="ltr" style="font-size:11px">${esc(m.device).slice(0,10)}</td><td>${ST[m.status]||m.status}</td><td>${m.status=='pending'?`<button class="btn" onclick="decide(${m.id},'approve')">تأیید</button> <button class="btn alt" onclick="decide(${m.id},'reject')">رد</button>`:''}</td></tr>`).join('')}
+async function decide(id,d){if(d=='reject'&&!confirm('رد شود؟'))return;await api('/admin/api/manual/'+id+'/'+d,'POST');toast(d=='approve'?'اشتراک فعال شد':'رد شد');loadManual()}
+loadConfig();loadStats();
+</script>
+</body></html>
