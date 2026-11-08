@@ -53,7 +53,13 @@ code{direction:ltr;display:inline-block}
  <h3>کارت‌به‌کارت (بدون درگاه)</h3><div class="row"><div><label>شماره کارت دریافت</label><input id="card_number" dir="ltr"></div><div><label>به نام</label><input id="card_holder"></div></div>
  <label>شماره شبا (پایا/ساتنا)</label><input id="sheba" dir="ltr">
  <p class="muted">اگر شماره کارت پر باشد و درگاه خاموش، کاربران با کارت‌به‌کارت می‌خرند و شما در تب «پرداخت‌های کارتی» تأیید می‌کنید.</p>
- <h3>مغز هوش مصنوعی</h3><label>آدرس سازگار با OpenAI (خالی = پیش‌فرض)</label><input id="ai_endpoint" dir="ltr">
+ <h3>مغز هوش مصنوعی</h3>
+ <p class="muted">با کلید ChatGPT یا Gemini جواب‌های همه‌ی کاربران خیلی سریع‌تر می‌شود. کلید فقط روی سرور می‌ماند و به گوشی‌ها فرستاده نمی‌شود.</p>
+ <div class="row"><div><label>ارائه‌دهنده</label><select id="ai_provider" onchange="aiPreset()"><option value="free">رایگان (Pollinations)</option><option value="openai">ChatGPT (OpenAI)</option><option value="gemini">Gemini (گوگل)</option><option value="custom">سازگار با OpenAI (سفارشی)</option></select></div>
+ <div><label>کلید API <span class="muted" id="aiKeyHint"></span></label><input id="ai_key" dir="ltr" type="password" placeholder="خالی = کلید قبلی بماند؛ - = پاک شود" autocomplete="off"></div></div>
+ <div class="row"><div><label>مدل</label><input id="ai_model" dir="ltr"></div><div><label>آدرس پایه (Base URL)</label><input id="ai_base_url" dir="ltr"></div></div>
+ <button class="btn alt" onclick="aiTest()">آزمایش مغز</button> <span class="muted" id="aiTestOut"></span>
+ <label>آدرس جایگزین مغز داخل اپ (قدیمی، خالی = پیش‌فرض)</label><input id="ai_endpoint" dir="ltr">
  <table id="plansTbl"></table><button class="btn alt" onclick="addPlan()">+ طرح</button>
  <br><button class="btn" onclick="saveMoney()">ذخیره</button></div></section>
 
@@ -99,12 +105,12 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.query
 async function loadConfig(){C=await api('/admin/api/config');const a=C.announcement||{},u=C.update||{};
  $('ann_active').checked=!!a.active;$('ann_title').value=a.title||'';$('ann_text').value=a.text||'';$('ann_url').value=a.url||'';
  $('up_latest').value=u.latest_version||0;$('up_min').value=u.min_version||0;$('up_url').value=u.url||'';$('up_msg').value=u.message||'';
- ['welcome','download_url','support_url','ad_every_n','ad_skip_seconds','referral_days','pro_invites','card_number','card_holder','sheba','ai_endpoint'].forEach(k=>$(k).value=C[k]??'');
+ ['welcome','download_url','support_url','ad_every_n','ad_skip_seconds','referral_days','pro_invites','card_number','card_holder','sheba','ai_endpoint','ai_provider','ai_model','ai_base_url'].forEach(k=>$(k).value=C[k]??'');$('ai_provider').value=C.ai_provider||'free';$('ai_key').value='';$('aiKeyHint').textContent=C._ai_key_hint?('ذخیره‌شده: '+C._ai_key_hint):'';
  $('ads_enabled').checked=!!C.ads_enabled;$('payment_enabled').checked=!!C.payment_enabled;
  $('zpInfo').textContent=C._zarinpal_ready?'درگاه زرین‌پال آماده است.':'برای پرداخت اینترنتی، ZARINPAL_MERCHANT و PUBLIC_URL را در تنظیمات سرور بگذارید. تا آن موقع فقط کد فعال‌سازی کار می‌کند.';
  $('features').innerHTML=Object.entries(C.features||{}).map(([k,v])=>`<div class="chk"><input type="checkbox" data-f="${esc(k)}" ${v?'checked':''}><span>${esc(k)}</span></div>`).join('');
  renderPlans();renderCmds();renderAns();$('jokes').value=(C.jokes||[]).join('\n');$('rawJson').value=JSON.stringify(C,null,2)}
-async function put(){delete C._zarinpal_ready;await api('/admin/api/config','PUT',C);toast('ذخیره شد');await loadConfig()}
+async function put(){delete C._zarinpal_ready;delete C._ai_key_hint;await api('/admin/api/config','PUT',C);toast('ذخیره شد');await loadConfig()}
 function saveGeneral(){C.announcement={active:$('ann_active').checked,id:String(Date.now()),title:$('ann_title').value,text:$('ann_text').value,url:$('ann_url').value};
  C.update={latest_version:+$('up_latest').value,min_version:+$('up_min').value,url:$('up_url').value,message:$('up_msg').value};
  ['welcome','download_url','support_url'].forEach(k=>C[k]=$(k).value);document.querySelectorAll('[data-f]').forEach(x=>C.features[x.dataset.f]=x.checked);put()}
@@ -112,7 +118,10 @@ function renderPlans(){$('plansTbl').innerHTML='<tr><th>شناسه</th><th>عن�
  `<tr>${['id','title','price','days','badge'].map(k=>`<td><input data-p="${i}" data-k="${k}" value="${esc(p[k])}"></td>`).join('')}<td><button class="btn red" onclick="C.plans.splice(${i},1);renderPlans()">✕</button></td></tr>`).join('')}
 function readPlans(){document.querySelectorAll('[data-p]').forEach(x=>{const p=C.plans[x.dataset.p];p[x.dataset.k]=['price','days'].includes(x.dataset.k)?+x.value:x.value})}
 function addPlan(){readPlans();C.plans.push({id:'',title:'',price:0,days:30,badge:''});renderPlans()}
-function saveMoney(){readPlans();C.ads_enabled=$('ads_enabled').checked;C.payment_enabled=$('payment_enabled').checked;['ad_every_n','ad_skip_seconds','referral_days','pro_invites'].forEach(k=>C[k]=+$(k).value);['card_number','card_holder','sheba','ai_endpoint'].forEach(k=>C[k]=$(k).value.trim());put()}
+function saveMoney(){readPlans();C.ads_enabled=$('ads_enabled').checked;C.payment_enabled=$('payment_enabled').checked;['ad_every_n','ad_skip_seconds','referral_days','pro_invites'].forEach(k=>C[k]=+$(k).value);['card_number','card_holder','sheba','ai_endpoint','ai_provider','ai_key','ai_model','ai_base_url'].forEach(k=>C[k]=$(k).value.trim());put()}
+const AI_P={openai:['https://api.openai.com/v1','gpt-4o-mini'],gemini:['https://generativelanguage.googleapis.com/v1beta/openai','gemini-2.0-flash']};
+function aiPreset(){const p=AI_P[$('ai_provider').value];if(p){$('ai_base_url').value=p[0];$('ai_model').value=p[1]}}
+async function aiTest(){$('aiTestOut').textContent='در حال آزمایش…';try{const r=await api('/admin/api/ai_test','POST',{});$('aiTestOut').textContent=(r.ok?'✓ ':'✗ ')+(r.provider||'')+' — '+r.ms+' میلی‌ثانیه — '+(r.text||r.error||'')}catch(e){$('aiTestOut').textContent='✗ '+e.message}}
 function renderCmds(){$('cmdTbl').innerHTML='<tr><th>عبارت‌ها</th><th>نوع</th><th>مقدار</th><th>پاسخ</th><th>فعال</th><th></th></tr>'+(C.custom_commands||[]).map((c,i)=>
  `<tr><td><input data-c="${i}" data-k="phrases" value="${esc((c.phrases||[]).join('، '))}"></td><td><select data-c="${i}" data-k="action">${['say','url','app','command'].map(a=>`<option ${c.action==a?'selected':''}>${a}</option>`).join('')}</select></td>
  <td><input data-c="${i}" data-k="value" value="${esc(c.value)}"></td><td><input data-c="${i}" data-k="reply" value="${esc(c.reply)}"></td><td><input type="checkbox" data-c="${i}" data-k="active" ${c.active!==false?'checked':''}></td>

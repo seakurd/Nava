@@ -10,7 +10,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 DATA = Path(os.environ.get("NAVA_DATA", "/data"))
@@ -35,6 +35,9 @@ DEFAULT_CONFIG = {
     "payment_enabled": False,
     "card_number": "", "card_holder": "پیام باب", "sheba": "IR580560611828006998292102",   # پرداخت کارت‌به‌کارت (تأیید دستی در پنل)
     "ai_endpoint": "",                       # خالی = مغز پیش‌فرض داخل اپ
+    # کلید هوش مصنوعی سرور (فقط روی سرور می‌ماند و هرگز به اپ فرستاده نمی‌شود)
+    "ai_provider": "free",                   # free | openai | gemini | custom
+    "ai_key": "", "ai_model": "", "ai_base_url": "",
     "plans": [
         {"id": "monthly", "title": "یک‌ماهه", "price": 49000, "days": 30, "badge": ""},
         {"id": "quarterly", "title": "سه‌ماهه", "price": 129000, "days": 90, "badge": "۱۲٪ تخفیف"},
@@ -138,6 +141,8 @@ def api_config(device: str = "", v: int = 0):
             touch_device(c, device, version=v)
     cfg = get_config()
     cfg.pop("answers", None)
+    for k in ("ai_key", "ai_base_url", "ai_model", "ai_provider"):
+        cfg.pop(k, None)
     return cfg
 
 
@@ -222,20 +227,79 @@ async def api_manual_pay(req: Request):
     return {"ok": True, "message": "پرداخت ثبت شد؛ پس از تأیید، ناوا پرو خودکار فعال می‌شود."}
 
 
+AI_PRESETS = {
+    "openai": ("https://api.openai.com/v1", "gpt-4o-mini"),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash"),
+}
+POLLINATIONS = "https://text.pollinations.ai/openai"
+_ai_client = httpx.AsyncClient(timeout=httpx.Timeout(40, connect=6),
+                               limits=httpx.Limits(max_keepalive_connections=20, keepalive_expiry=120))
+ALLOWED_KEYS = ("messages", "temperature", "max_tokens", "stream", "tools", "tool_choice", "top_p", "response_format")
+
+
+def ai_target(cfg: dict):
+    """(url, headers, model) برای کلید سرور، یا None اگر کلیدی تنظیم نشده."""
+    key = (cfg.get("ai_key") or "").strip()
+    prov = cfg.get("ai_provider") or "free"
+    if not key or prov == "free":
+        return None
+    base, model = AI_PRESETS.get(prov, ("", ""))
+    base = (cfg.get("ai_base_url") or base or "").strip().rstrip("/")
+    model = (cfg.get("ai_model") or model or "").strip()
+    if not base or not model:
+        return None
+    return f"{base}/chat/completions", {"Authorization": f"Bearer {key}"}, model
+
+
+async def _proxy(url: str, headers: dict, body: dict):
+    """درخواست را می‌فرستد؛ اگر stream بود جواب را تکه‌تکه رد می‌کند. خطا قبل از شروع = None."""
+    if body.get("stream"):
+        req = _ai_client.build_request("POST", url, json=body, headers=headers)
+        r = await _ai_client.send(req, stream=True)
+        if r.status_code != 200:
+            await r.aclose()
+            return None
+
+        async def gen():
+            try:
+                async for chunk in r.aiter_raw():
+                    yield chunk
+            finally:
+                await r.aclose()
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    r = await _ai_client.post(url, json=body, headers=headers)
+    if r.status_code != 200:
+        return None
+    return Response(content=r.content, status_code=200, media_type="application/json")
+
+
 @app.post("/api/ai")
 async def api_ai(request: Request):
-    """پل هوش مصنوعی برای اپ (وقتی سرویس مستقیم از ایران در دسترس نیست)."""
+    """پل هوش مصنوعی برای اپ. اگر مدیر کلید گذاشته باشد از آن (سریع)، وگرنه Pollinations رایگان."""
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(400, "bad json")
+    t = ai_target(get_config())
+    if t:
+        url, headers, model = t
+        clean = {k: body[k] for k in ALLOWED_KEYS if k in body}
+        clean["model"] = model
+        try:
+            res = await _proxy(url, headers, clean)
+            if res is not None:
+                return res
+        except Exception:
+            pass
     body["private"] = True
     try:
-        async with httpx.AsyncClient(timeout=40) as cl:
-            r = await cl.post("https://text.pollinations.ai/openai", json=body)
-        return Response(content=r.content, status_code=r.status_code, media_type="application/json")
+        res = await _proxy(POLLINATIONS, {}, body)
+        if res is not None:
+            return res
     except Exception:
-        raise HTTPException(502, "ai unavailable")
+        pass
+    raise HTTPException(502, "ai unavailable")
 
 
 @app.get("/api/ads/next")
@@ -392,15 +456,44 @@ def admin_page(_=Depends(admin)):
 
 @app.get("/admin/api/config")
 def admin_get_config(_=Depends(admin)):
-    return get_config() | {"_zarinpal_ready": bool(ZARINPAL_MERCHANT)}
+    cfg = get_config()
+    key = cfg.get("ai_key") or ""
+    cfg["ai_key"] = ""
+    return cfg | {"_zarinpal_ready": bool(ZARINPAL_MERCHANT),
+                  "_ai_key_hint": ("…" + key[-4:]) if key else ""}
 
 
 @app.put("/admin/api/config")
 async def admin_put_config(req: Request, _=Depends(admin)):
     j = await req.json()
     j.pop("_zarinpal_ready", None)
+    j.pop("_ai_key_hint", None)
+    # کلید خالی = همان کلید قبلی بماند؛ برای پاک کردن، "-" بفرستید
+    old_key = get_config().get("ai_key", "")
+    k = (j.get("ai_key") or "").strip()
+    j["ai_key"] = "" if k == "-" else (k or old_key)
     save_config(j)
     return {"ok": True}
+
+
+@app.post("/admin/api/ai_test")
+async def admin_ai_test(_=Depends(admin)):
+    """آزمایش مغز: زمان پاسخ و یک جمله‌ی نمونه."""
+    cfg = get_config()
+    t = ai_target(cfg)
+    body = {"messages": [{"role": "user", "content": "در یک جمله‌ی کوتاه فارسی سلام کن."}], "max_tokens": 60}
+    url, headers = (t[0], t[1]) if t else (POLLINATIONS, {})
+    body["model"] = t[2] if t else "openai-fast"
+    start = time.time()
+    try:
+        r = await _ai_client.post(url, json=body, headers=headers)
+        ms = int((time.time() - start) * 1000)
+        if r.status_code != 200:
+            return {"ok": False, "ms": ms, "provider": cfg.get("ai_provider"), "error": r.text[:300]}
+        text = r.json()["choices"][0]["message"]["content"]
+        return {"ok": True, "ms": ms, "provider": cfg.get("ai_provider") if t else "free", "text": text[:200]}
+    except Exception as e:
+        return {"ok": False, "ms": int((time.time() - start) * 1000), "error": str(e)[:300]}
 
 
 @app.get("/admin/api/ads")
