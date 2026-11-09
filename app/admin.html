@@ -121,7 +121,7 @@ async function loadConfig(){C=await api('/admin/api/config');const a=C.announcem
  $('up_latest').value=u.latest_version||0;$('up_min').value=u.min_version||0;$('up_url').value=u.url||'';$('up_msg').value=u.message||'';
  ['welcome','download_url','support_url','ad_every_n','ad_skip_seconds','referral_days','pro_invites','card_number','card_holder','sheba','ai_endpoint','ai_provider','ai_model','ai_base_url'].forEach(k=>$(k).value=C[k]??'');$('ai_provider').value=C.ai_provider||'free';$('ai_key').value='';$('aiKeyHint').textContent=C._ai_key_hint?('ذخیره‌شده: '+C._ai_key_hint):'';
  $('ads_enabled').checked=!!C.ads_enabled;$('payment_enabled').checked=!!C.payment_enabled;
- $('zpInfo').textContent=C._zarinpal_ready?'درگاه زرین‌پال آماده است.':'برای پرداخت اینترنتی، ZARINPAL_MERCHANT و PUBLIC_URL را در تنظیمات سرور بگذارید. تا آن موقع فقط کد فعال‌سازی کار می‌کند.';
+ $('zpInfo').textContent=C._zarinpal_ready?'درگاه زرین‌پال واقعی آماده است.':(C._zarinpal_sandbox?'درگاه زرین‌پال در حالت آزمایشی (sandbox) است؛ مرچنت را در ناوا ادمین بگذارید تا واقعی شود.':'درگاه خاموش است.');
  $('features').innerHTML=Object.entries(C.features||{}).map(([k,v])=>`<div class="chk"><input type="checkbox" data-f="${esc(k)}" ${v?'checked':''}><span>${esc(k)}</span></div>`).join('');
  renderPlans();renderCmds();renderAns();$('jokes').value=(C.jokes||[]).join('\n');$('rawJson').value=JSON.stringify(C,null,2)}
 async function put(){delete C._zarinpal_ready;delete C._ai_key_hint;await api('/admin/api/config','PUT',C);toast('ذخیره شد');await loadConfig()}
