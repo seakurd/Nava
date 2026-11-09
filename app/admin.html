@@ -25,7 +25,7 @@ code{direction:ltr;display:inline-block}
 <header>🎙 پنل مدیریت ناوا</header>
 <nav>
  <button data-t="stats" class="on">آمار</button><button data-t="general">تنظیمات کلی</button><button data-t="money">تبلیغ و اشتراک</button><button data-t="cardpay">پرداخت‌های کارتی</button>
- <button data-t="ads">تبلیغ‌ها</button><button data-t="codes">کدهای پرو</button><button data-t="content">محتوا و فرمان‌ها</button><button data-t="raw">JSON خام</button>
+ <button data-t="ads">تبلیغ‌ها</button><button data-t="codes">کدهای پرو</button><button data-t="content">محتوا و فرمان‌ها</button><button data-t="super">پرو و هوش مصنوعی ✦</button><button data-t="users">کاربران</button><button data-t="raw">JSON خام</button>
 </nav>
 <main>
 <section id="stats"><div class="card"><div class="grid" id="statGrid"></div></div>
@@ -55,7 +55,7 @@ code{direction:ltr;display:inline-block}
  <p class="muted">اگر شماره کارت پر باشد و درگاه خاموش، کاربران با کارت‌به‌کارت می‌خرند و شما در تب «پرداخت‌های کارتی» تأیید می‌کنید.</p>
  <h3>مغز هوش مصنوعی</h3>
  <p class="muted">با کلید ChatGPT یا Gemini جواب‌های همه‌ی کاربران خیلی سریع‌تر می‌شود. کلید فقط روی سرور می‌ماند و به گوشی‌ها فرستاده نمی‌شود.</p>
- <div class="row"><div><label>ارائه‌دهنده</label><select id="ai_provider" onchange="aiPreset()"><option value="free">رایگان (Pollinations)</option><option value="openai">ChatGPT (OpenAI)</option><option value="gemini">Gemini (گوگل)</option><option value="custom">سازگار با OpenAI (سفارشی)</option></select></div>
+ <div class="row"><div><label>ارائه‌دهنده</label><select id="ai_provider" onchange="aiPreset()"><option value="free">رایگان (Pollinations)</option><option value="openai">ChatGPT (OpenAI)</option><option value="gemini">Gemini (گوگل)</option><option value="openrouter">OpenRouter</option><option value="groq">Groq (فوق‌سریع)</option><option value="deepseek">DeepSeek</option><option value="custom">سازگار با OpenAI (سفارشی)</option></select></div>
  <div><label>کلید API <span class="muted" id="aiKeyHint"></span></label><input id="ai_key" dir="ltr" type="password" placeholder="خالی = کلید قبلی بماند؛ - = پاک شود" autocomplete="off"></div></div>
  <div class="row"><div><label>مدل</label><input id="ai_model" dir="ltr"></div><div><label>آدرس پایه (Base URL)</label><input id="ai_base_url" dir="ltr"></div></div>
  <button class="btn alt" onclick="aiTest()">آزمایش مغز</button> <span class="muted" id="aiTestOut"></span>
@@ -91,6 +91,20 @@ code{direction:ltr;display:inline-block}
  <h3>جوک‌ها (هر خط یک جوک)</h3><textarea id="jokes" style="min-height:160px"></textarea>
  <br><button class="btn" onclick="saveContent()">ذخیره</button></div></section>
 
+<section id="super" class="hide"><div class="card">
+ <h3>امتیازهای ناوا پرو</h3>
+ <div class="chk"><input type="checkbox" id="ai_pro_only"><span>مغز سریع سرور (کلید شما) فقط برای کاربران پرو باشد</span></div>
+ <p class="muted">اگر خاموش باشد، همه‌ی کاربران بدون کلید شخصی از کلید سرور استفاده می‌کنند (هزینه‌ی API بالاتر).</p>
+ <div class="row"><div><label>سقف تصویرسازی رایگان در روز (پرو نامحدود و HD)</label><input id="free_images_per_day" type="number" min="0"></div><div></div></div>
+ <h3>دستیارهای تخصصی اضافه</h3>
+ <p class="muted">در منوی بالای چت اپ نمایش داده می‌شوند. «دستور» به انگلیسی یا فارسی، نقش دستیار را تعیین می‌کند. تیک «پرو» = فقط برای مشترکان.</p>
+ <table id="persTbl"></table><button class="btn alt" onclick="addPers()">+ دستیار</button>
+ <br><button class="btn" onclick="saveSuper()">ذخیره</button></div></section>
+
+<section id="users" class="hide"><div class="card"><h3>جستجوی کاربر</h3>
+ <div class="row"><div><label>شناسه‌ی دستگاه یا کد دعوت</label><input id="u_q" dir="ltr"></div><div><label>&nbsp;</label><button class="btn alt" onclick="loadUsers()">جستجو</button></div></div>
+ <table id="usersTbl"></table></div></section>
+
 <section id="raw" class="hide"><div class="card"><p class="muted">ویرایش مستقیم همه‌ی تنظیمات. با احتیاط!</p>
  <textarea id="rawJson" dir="ltr" style="min-height:420px;font-family:monospace"></textarea><button class="btn" onclick="saveRaw()">ذخیره</button></div></section>
 </main>
@@ -101,7 +115,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const api=async(u,m='GET',b)=>{const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});if(!r.ok)throw new Error(await r.text());return r.json()};
 const toast=t=>{$('toast').textContent=t;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2200)};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
- document.querySelectorAll('main section').forEach(s=>s.classList.add('hide'));$(b.dataset.t).classList.remove('hide');({stats:loadStats,ads:loadAds,codes:loadCodes,cardpay:loadManual})[b.dataset.t]?.()});
+ document.querySelectorAll('main section').forEach(s=>s.classList.add('hide'));$(b.dataset.t).classList.remove('hide');({stats:loadStats,ads:loadAds,codes:loadCodes,cardpay:loadManual,super:renderSuper,users:loadUsers})[b.dataset.t]?.()});
 async function loadConfig(){C=await api('/admin/api/config');const a=C.announcement||{},u=C.update||{};
  $('ann_active').checked=!!a.active;$('ann_title').value=a.title||'';$('ann_text').value=a.text||'';$('ann_url').value=a.url||'';
  $('up_latest').value=u.latest_version||0;$('up_min').value=u.min_version||0;$('up_url').value=u.url||'';$('up_msg').value=u.message||'';
@@ -119,7 +133,16 @@ function renderPlans(){$('plansTbl').innerHTML='<tr><th>شناسه</th><th>عن�
 function readPlans(){document.querySelectorAll('[data-p]').forEach(x=>{const p=C.plans[x.dataset.p];p[x.dataset.k]=['price','days'].includes(x.dataset.k)?+x.value:x.value})}
 function addPlan(){readPlans();C.plans.push({id:'',title:'',price:0,days:30,badge:''});renderPlans()}
 function saveMoney(){readPlans();C.ads_enabled=$('ads_enabled').checked;C.payment_enabled=$('payment_enabled').checked;['ad_every_n','ad_skip_seconds','referral_days','pro_invites'].forEach(k=>C[k]=+$(k).value);['card_number','card_holder','sheba','ai_endpoint','ai_provider','ai_key','ai_model','ai_base_url'].forEach(k=>C[k]=$(k).value.trim());put()}
-const AI_P={openai:['https://api.openai.com/v1','gpt-4o-mini'],gemini:['https://generativelanguage.googleapis.com/v1beta/openai','gemini-2.0-flash']};
+const AI_P={openai:['https://api.openai.com/v1','gpt-6-luna'],gemini:['https://generativelanguage.googleapis.com/v1beta/openai','gemini-3.5-flash-lite'],openrouter:['https://openrouter.ai/api/v1','openai/gpt-6-luna'],groq:['https://api.groq.com/openai/v1','llama-3.3-70b-versatile'],deepseek:['https://api.deepseek.com/v1','deepseek-chat']};
+function renderSuper(){$('ai_pro_only').checked=!!C.ai_pro_only;$('free_images_per_day').value=C.free_images_per_day??10;C.personas=C.personas||[];renderPers()}
+function renderPers(){$('persTbl').innerHTML='<tr><th>شناسه</th><th>عنوان</th><th>ایموجی</th><th>دستور</th><th>پرو</th><th></th></tr>'+C.personas.map((p,i)=>
+ `<tr>${['id','title','emoji'].map(k=>`<td><input data-ps="${i}" data-k="${k}" value="${esc(p[k])}"></td>`).join('')}<td><textarea data-ps="${i}" data-k="prompt">${esc(p.prompt)}</textarea></td><td><input type="checkbox" data-ps="${i}" data-k="pro" ${p.pro?'checked':''}></td><td><button class="btn red" onclick="readPers();C.personas.splice(${i},1);renderPers()">✕</button></td></tr>`).join('')}
+function readPers(){document.querySelectorAll('[data-ps]').forEach(x=>{const p=C.personas[x.dataset.ps];p[x.dataset.k]=x.type==='checkbox'?x.checked:x.value})}
+function addPers(){readPers();C.personas.push({id:'p'+Date.now().toString(36),title:'',emoji:'⭐',prompt:'',pro:false});renderPers()}
+function saveSuper(){readPers();C.personas=C.personas.filter(p=>p.title&&p.prompt);C.ai_pro_only=$('ai_pro_only').checked;C.free_images_per_day=+$('free_images_per_day').value;put()}
+async function loadUsers(){const r=await api('/admin/api/devices?q='+encodeURIComponent($('u_q').value.trim()));const d=t=>t?new Date(t).toLocaleDateString('fa-IR'):'—';
+ $('usersTbl').innerHTML='<tr><th>دستگاه</th><th>کد</th><th>نسخه</th><th>دعوت</th><th>پرو تا</th><th>آخرین بازدید</th><th></th></tr>'+r.map(u=>`<tr><td><code>${esc(u.id.slice(0,12))}…</code></td><td>${esc(u.code||'')}</td><td>${u.version}</td><td>${u.invited}</td><td>${u.pro_until>Date.now()?d(u.pro_until):'—'}</td><td>${d(u.last_seen)}</td><td><button class="btn alt" onclick="gift('${esc(u.id)}')">هدیه‌ی پرو</button></td></tr>`).join('')}
+async function gift(id){const days=prompt('چند روز پرو هدیه بدهم؟','30');if(!days)return;await api('/admin/api/devices/'+encodeURIComponent(id)+'/pro','POST',{days:+days});toast('هدیه داده شد');loadUsers()}
 function aiPreset(){const p=AI_P[$('ai_provider').value];if(p){$('ai_base_url').value=p[0];$('ai_model').value=p[1]}}
 async function aiTest(){$('aiTestOut').textContent='در حال آزمایش…';try{const r=await api('/admin/api/ai_test','POST',{});$('aiTestOut').textContent=(r.ok?'✓ ':'✗ ')+(r.provider||'')+' — '+r.ms+' میلی‌ثانیه — '+(r.text||r.error||'')}catch(e){$('aiTestOut').textContent='✗ '+e.message}}
 function renderCmds(){$('cmdTbl').innerHTML='<tr><th>عبارت‌ها</th><th>نوع</th><th>مقدار</th><th>پاسخ</th><th>فعال</th><th></th></tr>'+(C.custom_commands||[]).map((c,i)=>
@@ -137,7 +160,7 @@ function addCmd(){readContent();C.custom_commands.push({phrases:[],action:'say',
 function addAns(){readContent();C.answers.push({q:[],title:'',text:'',url:''});renderAns()}
 function saveContent(){readContent();C.jokes=$('jokes').value.split('\n').map(s=>s.trim()).filter(Boolean);put()}
 function saveRaw(){try{C=JSON.parse($('rawJson').value);put()}catch(e){alert('JSON نامعتبر: '+e.message)}}
-async function loadStats(){const s=await api('/admin/api/stats');const L={devices:'کل نصب‌ها',active_1d:'فعال امروز',active_7d:'فعال ۷ روز',new_7d:'نصب تازه ۷ روز',pro_active:'پرو فعال',referrals:'دعوت موفق',commands_1d:'فرمان امروز',impressions_1d:'نمایش تبلیغ امروز',clicks_1d:'کلیک امروز',revenue_toman:'درآمد اشتراک (تومان)'};
+async function loadStats(){const s=await api('/admin/api/stats');const L={devices:'کل نصب‌ها',active_1d:'فعال امروز',active_7d:'فعال ۷ روز',new_7d:'نصب تازه ۷ روز',pro_active:'پرو فعال',pending_cards:'پرداخت کارتی منتظر',on_latest:'روی آخرین نسخه',referrals:'دعوت موفق',commands_1d:'فرمان امروز',impressions_1d:'نمایش تبلیغ امروز',clicks_1d:'کلیک امروز',revenue_toman:'درآمد اشتراک (تومان)'};
  $('statGrid').innerHTML=Object.entries(L).map(([k,t])=>`<div class="stat"><b>${(+s[k]).toLocaleString('fa-IR')}</b><span>${t}</span></div>`).join('');
  $('kinds').innerHTML=s.top_kinds.map(k=>`<tr><td>${esc(k.kind)}</td><td>${k.n.toLocaleString('fa-IR')}</td></tr>`).join('')||'<tr><td class="muted">هنوز داده‌ای نیست</td></tr>';
  $('pays').innerHTML=s.payments.map(p=>`<tr><td>${new Date(p.created).toLocaleString('fa-IR')}</td><td>${esc(p.plan)}</td><td>${(p.amount/10).toLocaleString('fa-IR')}</td><td>${esc(p.status)}</td><td dir="ltr">${esc(p.ref_id)}</td></tr>`).join('')||'<tr><td class="muted">پرداختی نیست</td></tr>'}

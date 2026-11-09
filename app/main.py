@@ -38,6 +38,9 @@ DEFAULT_CONFIG = {
     # کلید هوش مصنوعی سرور (فقط روی سرور می‌ماند و هرگز به اپ فرستاده نمی‌شود)
     "ai_provider": "free",                   # free | openai | gemini | custom
     "ai_key": "", "ai_model": "", "ai_base_url": "",
+    "ai_pro_only": False,                    # true = مغز سریع سرور فقط برای کاربران پرو
+    "free_images_per_day": 10,               # سقف تصویرسازی رایگان روزانه در اپ (پرو نامحدود)
+    "personas": [],                          # دستیارهای تخصصی اضافه: [{"id","title","emoji","prompt","pro"}]
     "plans": [
         {"id": "monthly", "title": "یک‌ماهه", "price": 49000, "days": 30, "badge": ""},
         {"id": "quarterly", "title": "سه‌ماهه", "price": 129000, "days": 90, "badge": "۱۲٪ تخفیف"},
@@ -258,8 +261,11 @@ async def api_manual_pay(req: Request):
 
 
 AI_PRESETS = {
-    "openai": ("https://api.openai.com/v1", "gpt-4o-mini"),
-    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash"),
+    "openai": ("https://api.openai.com/v1", "gpt-6-luna"),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.5-flash-lite"),
+    "openrouter": ("https://openrouter.ai/api/v1", "openai/gpt-6-luna"),
+    "groq": ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+    "deepseek": ("https://api.deepseek.com/v1", "deepseek-chat"),
 }
 POLLINATIONS = "https://text.pollinations.ai/openai"
 _ai_client = httpx.AsyncClient(timeout=httpx.Timeout(40, connect=6),
@@ -304,24 +310,46 @@ async def _proxy(url: str, headers: dict, body: dict):
     return Response(content=r.content, status_code=200, media_type="application/json")
 
 
+def _is_pro(device: str) -> bool:
+    if not device:
+        return False
+    with db() as c:
+        r = c.execute("SELECT pro_until FROM devices WHERE id=?", (device[:64],)).fetchone()
+    return bool(r and r["pro_until"] > now_ms())
+
+
 @app.post("/api/ai")
-async def api_ai(request: Request):
-    """پل هوش مصنوعی برای اپ. اگر مدیر کلید گذاشته باشد از آن (سریع)، وگرنه Pollinations رایگان."""
+async def api_ai(request: Request, device: str = ""):
+    """پل هوش مصنوعی برای اپ. اگر مدیر کلید گذاشته باشد از آن (سریع)، وگرنه Pollinations رایگان.
+    اگر ai_pro_only روشن باشد، کلید سرور فقط برای دستگاه‌های پرو استفاده می‌شود."""
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(400, "bad json")
-    t = ai_target(get_config())
+    cfg = get_config()
+    t = ai_target(cfg)
+    if t and cfg.get("ai_pro_only") and not _is_pro(device):
+        t = None
     if t:
         url, headers, model = t
         clean = {k: body[k] for k in ALLOWED_KEYS if k in body}
         clean["model"] = model
-        try:
-            res = await _proxy(url, headers, clean)
-            if res is not None:
-                return res
-        except Exception:
-            pass
+        variants = [clean]
+        if "api.openai.com" in url:
+            # مدل‌های جدید OpenAI: max_completion_tokens و بدون temperature
+            v = dict(clean); mt = v.pop("max_tokens", None); v.pop("temperature", None)
+            if mt:
+                v["max_completion_tokens"] = mt
+            variants = [v]
+        minimal = {k: clean[k] for k in ("model", "messages", "stream", "tools", "tool_choice") if k in clean}
+        variants.append(minimal)
+        for v in variants:
+            try:
+                res = await _proxy(url, headers, v)
+                if res is not None:
+                    return res
+            except Exception:
+                pass
     body["private"] = True
     try:
         res = await _proxy(POLLINATIONS, {}, body)
@@ -587,6 +615,18 @@ async def admin_grant(device: str, req: Request, _=Depends(admin)):
     return {"ok": True}
 
 
+@app.get("/admin/api/devices")
+def admin_devices(q: str = "", _=Depends(admin)):
+    """جستجوی دستگاه با شناسه یا کد دعوت؛ برای هدیه دادن پرو از پنل/اپ ادمین."""
+    with db() as c:
+        if q:
+            like = f"%{q.strip()}%"
+            rows = c.execute("SELECT * FROM devices WHERE id LIKE ? OR code LIKE ? ORDER BY last_seen DESC LIMIT 50", (like, like.upper()))
+        else:
+            rows = c.execute("SELECT * FROM devices ORDER BY last_seen DESC LIMIT 50")
+        return [dict(r) for r in rows]
+
+
 @app.get("/admin/api/manual")
 def admin_manual(_=Depends(admin)):
     with db() as c:
@@ -618,6 +658,8 @@ def admin_stats(_=Depends(admin)):
         return {
             "devices": q("SELECT COUNT(*) FROM devices"),
             "active_1d": q("SELECT COUNT(*) FROM devices WHERE last_seen>?", t - DAY),
+            "pending_cards": q("SELECT COUNT(*) FROM manual_pay WHERE status='pending'"),
+            "on_latest": q("SELECT COUNT(*) FROM devices WHERE version>=(SELECT MAX(version) FROM devices)"),
             "active_7d": q("SELECT COUNT(*) FROM devices WHERE last_seen>?", t - 7 * DAY),
             "new_7d": q("SELECT COUNT(*) FROM devices WHERE first_seen>?", t - 7 * DAY),
             "pro_active": q("SELECT COUNT(*) FROM devices WHERE pro_until>?", t),
