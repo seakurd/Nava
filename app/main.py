@@ -4,7 +4,7 @@
   صدای ابری (edge-tts)، پاسخ‌های سفارشی، آمار، و پنل مدیریت محافظت‌شده با رمز.
 اجرا:  uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
-import hashlib, json, os, secrets, sqlite3, string, time, threading
+import asyncio, hashlib, json, os, secrets, sqlite3, string, time, threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -38,7 +38,9 @@ DEFAULT_CONFIG = {
     # کلید هوش مصنوعی سرور (فقط روی سرور می‌ماند و هرگز به اپ فرستاده نمی‌شود)
     "ai_provider": "free",                   # free | openai | gemini | custom
     "ai_key": "", "ai_model": "", "ai_base_url": "",
-    "ai_pro_only": False,                    # true = مغز سریع سرور فقط برای کاربران پرو
+    "ai_pro_only": False,
+    "latest_name": "4.2.0",
+    "maintenance": False, "maintenance_message": "",  # حالت تعمیر: اپ پیام را نشان می‌دهد                  # نام نسخه‌ی APK روی شاخه‌ی download (برای /dl)                    # true = مغز سریع سرور فقط برای کاربران پرو
     "free_images_per_day": 10,               # سقف تصویرسازی رایگان روزانه در اپ (پرو نامحدود)
     "personas": [],                          # دستیارهای تخصصی اضافه: [{"id","title","emoji","prompt","pro"}]
     "plans": [
@@ -49,7 +51,7 @@ DEFAULT_CONFIG = {
     "features": {"answers": True, "cloud_tts": True},
     "announcement": {"active": False, "id": "", "title": "", "text": "", "url": ""},
     "update": {"latest_version": 0, "min_version": 0, "url": "", "message": ""},
-    "welcome": "", "download_url": "", "support_url": "",
+    "welcome": "", "download_url": "https://nava-server-irc5.onrender.com/dl", "support_url": "",
     "jokes": [],
     "custom_commands": [],
     "answers": [],  # [{"q": ["ساعت کاری"], "title": "...", "text": "...", "url": ""}]
@@ -88,12 +90,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS payments (authority TEXT PRIMARY KEY, device TEXT, plan TEXT, amount INT,
             status TEXT, ref_id TEXT, created INT, verified INT);
         CREATE TABLE IF NOT EXISTS claims_ip (ip TEXT, ts INT);
+        CREATE TABLE IF NOT EXISTS ai_log (ts INT, ok INT, ms INT, src TEXT);
         CREATE TABLE IF NOT EXISTS manual_pay (id INTEGER PRIMARY KEY AUTOINCREMENT, device TEXT, plan TEXT, amount INT,
             last4 TEXT, ref TEXT, status TEXT, created INT, decided INT);
         """)
 
 
 init_db()
+START_TIME = time.time()
+LATEST_DEFAULT = "4.2.0"
 persist.start(DB, _lock)
 now_ms = lambda: int(time.time() * 1000)
 
@@ -104,7 +109,15 @@ def get_config() -> dict:
     cfg = dict(DEFAULT_CONFIG)
     if r:
         raw = json.loads(r["v"])
-        if _rescue_keys(raw):
+        changed = _rescue_keys(raw)
+        if not raw.get("_dl_v2"):
+            # یک‌بار: لینک دانلود از طریق شمارنده‌ی /dl
+            base = PUBLIC_URL or "https://nava-server-irc5.onrender.com"
+            raw["download_url"] = base + "/dl"
+            raw.setdefault("latest_name", LATEST_DEFAULT)
+            raw["_dl_v2"] = True
+            changed = True
+        if changed:
             save_config(raw)
         cfg.update(raw)
     cfg["payment_enabled"] = bool(cfg.get("payment_enabled")) and bool(ZARINPAL_MERCHANT)
@@ -268,6 +281,7 @@ AI_PRESETS = {
     "deepseek": ("https://api.deepseek.com/v1", "deepseek-chat"),
 }
 POLLINATIONS = "https://text.pollinations.ai/openai"
+LLM7 = "https://api.llm7.io/v1/chat/completions"
 _ai_client = httpx.AsyncClient(timeout=httpx.Timeout(40, connect=6),
                                limits=httpx.Limits(max_keepalive_connections=20, keepalive_expiry=120))
 ALLOWED_KEYS = ("messages", "temperature", "max_tokens", "stream", "tools", "tool_choice", "top_p", "response_format")
@@ -326,6 +340,7 @@ async def api_ai(request: Request, device: str = ""):
         body = await request.json()
     except Exception:
         raise HTTPException(400, "bad json")
+    t0 = time.time()
     cfg = get_config()
     t = ai_target(cfg)
     if t and cfg.get("ai_pro_only") and not _is_pro(device):
@@ -347,17 +362,42 @@ async def api_ai(request: Request, device: str = ""):
             try:
                 res = await _proxy(url, headers, v)
                 if res is not None:
+                    _ai_log(True, t0, "key")
                     return res
             except Exception:
                 pass
-    body["private"] = True
+    # مغز رایگان: LLM7 (سریع، ابزار) ← Pollinations (کند ولی همیشگی)
+    free = {k: body[k] for k in ALLOWED_KEYS if k in body}
+    for i, model in enumerate(("default", "fast")):
+        if i:
+            await asyncio.sleep(1.1)   # LLM7 رایگان: حداکثر ۱ درخواست در ثانیه
+        try:
+            res = await _proxy(LLM7, {}, {**free, "model": model})
+            if res is not None:
+                _ai_log(True, t0, "llm7")
+                return res
+        except Exception:
+            pass
+    pbody = dict(body); pbody["private"] = True; pbody.setdefault("model", "openai-fast")
     try:
-        res = await _proxy(POLLINATIONS, {}, body)
+        res = await _proxy(POLLINATIONS, {}, pbody)
         if res is not None:
+            _ai_log(True, t0, "pollinations")
             return res
     except Exception:
         pass
+    _ai_log(False, t0, "none")
     raise HTTPException(502, "ai unavailable")
+
+
+def _ai_log(ok: bool, t0: float, src: str):
+    try:
+        with db() as c:
+            c.execute("INSERT INTO ai_log VALUES(?,?,?,?)", (now_ms(), 1 if ok else 0, int((time.time() - t0) * 1000), src))
+            if ok is False or secrets.randbelow(50) == 0:
+                c.execute("DELETE FROM ai_log WHERE ts<?", (now_ms() - 40 * DAY,))
+    except Exception:
+        pass
 
 
 @app.get("/api/ads/next")
@@ -381,7 +421,7 @@ def api_next_ad(device: str = ""):
 
 @app.post("/api/ads/{ad_id}/{event}")
 async def api_ad_event(ad_id: str, event: str, req: Request):
-    if event not in ("impression", "click", "complete"):
+    if event not in ("impression", "click", "complete", "skip"):
         raise HTTPException(404)
     j = await req.json()
     with db() as c:
@@ -494,6 +534,40 @@ async def pay_callback(Authority: str = "", Status: str = ""):
     return _page("تأیید پرداخت ناموفق", "اگر مبلغ کسر شده، تا ۷۲ ساعت برمی‌گردد.", False)
 
 
+# ------------------------------------------------------------------ دانلود و آمار عمومی
+def _kv_get(c, k, default="0"):
+    r = c.execute("SELECT v FROM kv WHERE k=?", (k,)).fetchone()
+    return r["v"] if r else default
+
+
+@app.get("/dl")
+def download(request: Request):
+    """شمارنده‌ی دانلود + ریدایرکت به آخرین APK روی شاخه‌ی download."""
+    latest = str(get_config().get("latest_name") or LATEST_DEFAULT)
+    day = time.strftime("%Y%m%d", time.gmtime())
+    try:
+        with db() as c:
+            n = int(_kv_get(c, "downloads")) + 1
+            c.execute("INSERT OR REPLACE INTO kv VALUES('downloads', ?)", (str(n),))
+            dn = int(_kv_get(c, "dl_" + day)) + 1
+            c.execute("INSERT OR REPLACE INTO kv VALUES(?, ?)", ("dl_" + day, str(dn)))
+    except Exception:
+        pass
+    return RedirectResponse(f"https://github.com/seakurd/Nava/raw/download/Nava-{latest}.apk", status_code=302)
+
+
+@app.get("/api/stats")
+def public_stats():
+    """فقط اعداد بی‌خطر برای صفحه‌ی معرفی."""
+    t = now_ms()
+    latest = str(get_config().get("latest_name") or LATEST_DEFAULT)   # بیرون از قفل db (قفل بازگشتی نیست)
+    with db() as c:
+        q = lambda s, *a: c.execute(s, a).fetchone()[0]
+        return {"downloads": int(_kv_get(c, "downloads")), "devices": q("SELECT COUNT(*) FROM devices"),
+                "active_7d": q("SELECT COUNT(*) FROM devices WHERE last_seen>?", t - 7 * DAY),
+                "latest_version": latest}
+
+
 # ------------------------------------------------------------------ پنل مدیریت
 security = HTTPBasic()
 
@@ -541,16 +615,21 @@ async def admin_ai_test(_=Depends(admin)):
     cfg = get_config()
     t = ai_target(cfg)
     body = {"messages": [{"role": "user", "content": "در یک جمله‌ی کوتاه فارسی سلام کن."}], "max_tokens": 60}
-    url, headers = (t[0], t[1]) if t else (POLLINATIONS, {})
-    body["model"] = t[2] if t else "openai-fast"
+    url, headers = (t[0], t[1]) if t else (LLM7, {})
+    body["model"] = t[2] if t else "default"
+    if t and "api.openai.com" in url:
+        body["max_completion_tokens"] = body.pop("max_tokens")
     start = time.time()
     try:
         r = await _ai_client.post(url, json=body, headers=headers)
+        if r.status_code == 429:
+            await asyncio.sleep(1.5)
+            r = await _ai_client.post(url, json=body, headers=headers)
         ms = int((time.time() - start) * 1000)
         if r.status_code != 200:
             return {"ok": False, "ms": ms, "provider": cfg.get("ai_provider"), "error": r.text[:300]}
         text = r.json()["choices"][0]["message"]["content"]
-        return {"ok": True, "ms": ms, "provider": cfg.get("ai_provider") if t else "free", "text": text[:200]}
+        return {"ok": True, "ms": ms, "provider": cfg.get("ai_provider") if t else "free (llm7)", "text": (text or "")[:200]}
     except Exception as e:
         return {"ok": False, "ms": int((time.time() - start) * 1000), "error": str(e)[:300]}
 
@@ -627,6 +706,92 @@ def admin_devices(q: str = "", _=Depends(admin)):
         return [dict(r) for r in rows]
 
 
+@app.delete("/admin/api/devices/{device}/pro")
+def admin_revoke(device: str, _=Depends(admin)):
+    with db() as c:
+        c.execute("UPDATE devices SET pro_until=0, pro_plan='' WHERE id=?", (device,))
+    return {"ok": True}
+
+
+@app.post("/admin/api/backup")
+def admin_backup(_=Depends(admin)):
+    if not persist.enabled():
+        return {"ok": False, "message": "بکاپ خارجی تنظیم نشده است."}
+    persist.save(DB, _lock, force=True)
+    return {"ok": not persist.last_error, "last_ok": persist.last_ok, "error": persist.last_error, "target": persist.enabled()}
+
+
+@app.get("/admin/api/report")
+def admin_report(_=Depends(admin)):
+    """گزارش کامل لحظه‌ای برای ناوا ادمین (بدون هیچ کلیدی)."""
+    t = now_ms()
+    cfg = get_config()
+    with db() as c:
+        q = lambda s, *a: c.execute(s, a).fetchone()[0]
+        days = []
+        for i in range(29, -1, -1):
+            start = (int(time.time()) // 86400 - i) * 86400 * 1000
+            end = start + DAY
+            days.append({"day": time.strftime("%m/%d", time.gmtime(start / 1000)),
+                         "installs": q("SELECT COUNT(*) FROM devices WHERE first_seen>=? AND first_seen<?", start, end),
+                         "active": q("SELECT COUNT(DISTINCT device) FROM events WHERE ts>=? AND ts<?", start, end),
+                         "downloads": int(_kv_get(c, "dl_" + time.strftime("%Y%m%d", time.gmtime(start / 1000))))})
+        ai_day = c.execute("SELECT COUNT(*) n, COALESCE(SUM(ok),0) ok, COALESCE(AVG(CASE WHEN ok=1 THEN ms END),0) ms FROM ai_log WHERE ts>?", (t - DAY,)).fetchone()
+        ai_week = c.execute("SELECT COUNT(*) n, COALESCE(SUM(ok),0) ok, COALESCE(AVG(CASE WHEN ok=1 THEN ms END),0) ms FROM ai_log WHERE ts>?", (t - 7 * DAY,)).fetchone()
+        ai_src = [dict(r) for r in c.execute("SELECT src, COUNT(*) n FROM ai_log WHERE ts>? GROUP BY src ORDER BY n DESC", (t - 7 * DAY,))]
+        ad = lambda ev, since: q("SELECT COUNT(*) FROM ad_events WHERE event=? AND ts>?", ev, since)
+        report = {
+            "generated_at": t,
+            "downloads": {"total": int(_kv_get(c, "downloads")),
+                          "today": int(_kv_get(c, "dl_" + time.strftime("%Y%m%d", time.gmtime())))},
+            "devices": {
+                "total": q("SELECT COUNT(*) FROM devices"),
+                "new_1d": q("SELECT COUNT(*) FROM devices WHERE first_seen>?", t - DAY),
+                "new_7d": q("SELECT COUNT(*) FROM devices WHERE first_seen>?", t - 7 * DAY),
+                "new_30d": q("SELECT COUNT(*) FROM devices WHERE first_seen>?", t - 30 * DAY),
+                "dau": q("SELECT COUNT(*) FROM devices WHERE last_seen>?", t - DAY),
+                "wau": q("SELECT COUNT(*) FROM devices WHERE last_seen>?", t - 7 * DAY),
+                "mau": q("SELECT COUNT(*) FROM devices WHERE last_seen>?", t - 30 * DAY),
+            },
+            "versions": [dict(r) for r in c.execute("SELECT version, COUNT(*) n FROM devices GROUP BY version ORDER BY version DESC LIMIT 12")],
+            "pro": {
+                "active": q("SELECT COUNT(*) FROM devices WHERE pro_until>?", t),
+                "expiring_7d": q("SELECT COUNT(*) FROM devices WHERE pro_until>? AND pro_until<?", t, t + 7 * DAY),
+                "expired_30d": q("SELECT COUNT(*) FROM devices WHERE pro_until>0 AND pro_until<? AND pro_until>?", t, t - 30 * DAY),
+                "by_plan": [dict(r) for r in c.execute("SELECT pro_plan plan, COUNT(*) n FROM devices WHERE pro_until>? GROUP BY pro_plan", (t,))],
+            },
+            "referrals": {"total": q("SELECT COALESCE(SUM(invited),0) FROM devices"),
+                          "referred_devices": q("SELECT COUNT(*) FROM devices WHERE referred_by IS NOT NULL AND referred_by!=''")},
+            "ads": {"enabled": bool(cfg.get("ads_enabled", True)), "every_n": cfg.get("ad_every_n", 1),
+                    "impressions_1d": ad("impression", t - DAY), "clicks_1d": ad("click", t - DAY), "skips_1d": ad("skip", t - DAY),
+                    "completes_1d": ad("complete", t - DAY),
+                    "impressions_7d": ad("impression", t - 7 * DAY), "clicks_7d": ad("click", t - 7 * DAY), "skips_7d": ad("skip", t - 7 * DAY),
+                    "active_ads": q("SELECT COUNT(*) FROM ads WHERE active=1")},
+            "codes": {"created": q("SELECT COUNT(*) FROM codes"), "used": q("SELECT COUNT(*) FROM codes WHERE used_by IS NOT NULL")},
+            "payments": {"manual_pending": q("SELECT COUNT(*) FROM manual_pay WHERE status='pending'"),
+                         "manual_approved": q("SELECT COUNT(*) FROM manual_pay WHERE status='approved'"),
+                         "paid_total": q("SELECT COUNT(*) FROM payments WHERE status='paid'"),
+                         "revenue_toman": q("SELECT COALESCE(SUM(amount),0)/10 FROM payments WHERE status='paid'")},
+            "commands": {"today": q("SELECT COUNT(*) FROM events WHERE ts>?", t - DAY),
+                         "top_7d": [dict(r) for r in c.execute("SELECT kind, COUNT(*) n FROM events WHERE ts>? GROUP BY kind ORDER BY n DESC LIMIT 10", (t - 7 * DAY,))]},
+            "ai": {"requests_1d": ai_day["n"], "errors_1d": ai_day["n"] - ai_day["ok"], "avg_ms_1d": int(ai_day["ms"] or 0),
+                   "requests_7d": ai_week["n"], "errors_7d": ai_week["n"] - ai_week["ok"], "avg_ms_7d": int(ai_week["ms"] or 0),
+                   "sources_7d": ai_src, "provider": cfg.get("ai_provider", "free"), "model": cfg.get("ai_model", ""),
+                   "key_set": bool(cfg.get("ai_key")), "pro_only": bool(cfg.get("ai_pro_only"))},
+            "daily": days,
+        }
+    report["server"] = {
+        "uptime_sec": int(time.time() - START_TIME),
+        "db_bytes": DB.stat().st_size if DB.exists() else 0,
+        "backup_target": persist.enabled(), "last_backup": persist.last_ok, "backup_error": persist.last_error,
+        "latest_name": str(cfg.get("latest_name") or LATEST_DEFAULT),
+        "min_version": (cfg.get("update") or {}).get("min_version", 0),
+        "latest_version": (cfg.get("update") or {}).get("latest_version", 0),
+        "maintenance": bool(cfg.get("maintenance")),
+    }
+    return report
+
+
 @app.get("/admin/api/manual")
 def admin_manual(_=Depends(admin)):
     with db() as c:
@@ -637,12 +802,13 @@ def admin_manual(_=Depends(admin)):
 def admin_manual_decide(pid: int, decision: str, _=Depends(admin)):
     if decision not in ("approve", "reject"):
         raise HTTPException(400)
+    plans = {p["id"]: p for p in get_config().get("plans", [])}   # بیرون از قفل db تا قفل بن‌بست نشود
     with db() as c:
         r = c.execute("SELECT * FROM manual_pay WHERE id=?", (pid,)).fetchone()
         if not r or r["status"] != "pending":
             return {"ok": False}
         if decision == "approve":
-            p = _plan(r["plan"]) or {"days": 30}
+            p = plans.get(r["plan"]) or {"days": 30}
             extend_pro(c, r["device"], int(p["days"]), r["plan"])
             c.execute("INSERT OR IGNORE INTO payments VALUES(?,?,?,?,?,?,?,?)",
                       ("card-" + str(pid), r["device"], r["plan"], int(r["amount"]) * 10, "paid", r["ref"], now_ms(), now_ms()))

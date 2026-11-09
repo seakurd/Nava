@@ -13,6 +13,8 @@ if URL and _PW and "[YOUR-PASSWORD]" in URL:
     from urllib.parse import quote as _q
     URL = URL.replace("[YOUR-PASSWORD]", _q(_PW, safe=""))
 _last_hash = None
+last_ok = 0          # زمان آخرین بکاپ موفق (ثانیه)
+last_error = ""
 GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
 GH_REPO = os.environ.get("GH_REPO", "").strip()          # مثلاً seakurd/nava-data (خصوصی)
 GH_PATH = os.environ.get("GH_PATH", "nava.db")
@@ -101,8 +103,12 @@ def _snapshot(db_path: Path) -> bytes:
     return data
 
 
-def save(db_path: Path, lock=None):
-    global _last_hash
+def enabled() -> str:
+    return "postgres" if URL else ("github" if (GH_TOKEN and GH_REPO) else "")
+
+
+def save(db_path: Path, lock=None, force=False):
+    global _last_hash, last_ok, last_error
     if not (URL or (GH_TOKEN and GH_REPO)) or not db_path.exists():
         return
     try:
@@ -112,17 +118,21 @@ def save(db_path: Path, lock=None):
         else:
             data = _snapshot(db_path)
         h = hashlib.sha1(data).hexdigest()
-        if h == _last_hash:
+        if h == _last_hash and not force:
             return
         if not URL:
-            _gh_put(data)
+            if h != _last_hash:
+                _gh_put(data)
             _last_hash = h
+            last_ok = int(time.time()); last_error = ""
             return
         with _conn() as c:
             c.execute("INSERT INTO nava_blob(k,v,ts) VALUES('sqlite',%s,%s) ON CONFLICT (k) DO UPDATE SET v=EXCLUDED.v, ts=EXCLUDED.ts",
                       (data, int(time.time())))
         _last_hash = h
+        last_ok = int(time.time()); last_error = ""
     except Exception as e:
+        last_error = str(e)[:200]
         print("[persist] save failed:", e, flush=True)
 
 
