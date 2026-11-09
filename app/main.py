@@ -57,7 +57,7 @@ DEFAULT_CONFIG = {
     "plugins_off": [],                       # شناسه‌ی افزونه‌های داخلی خاموش
     "plugins": [],                           # افزونه‌های سفارشی: [{"id","title","emoji","desc","url","method","tool":{name,description,parameters},"pro","enabled"}]
     # فکر عمیق
-    "thinking_free_model": "pro",            # مدل LLM7 برای «فکر عمیق» بدون کلید
+    "thinking_free_model": "gpt-oss:20b",    # مدل استدلالی رایگان LLM7 برای «فکر عمیق» بدون کلید
     # نسخه‌ی ادمین
     "admin_latest_name": "2.2.0", "admin_latest_code": 5,
     "payment_enabled": True,
