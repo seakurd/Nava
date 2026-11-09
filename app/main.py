@@ -100,7 +100,10 @@ def get_config() -> dict:
         r = c.execute("SELECT v FROM kv WHERE k='config'").fetchone()
     cfg = dict(DEFAULT_CONFIG)
     if r:
-        cfg.update(json.loads(r["v"]))
+        raw = json.loads(r["v"])
+        if _rescue_keys(raw):
+            save_config(raw)
+        cfg.update(raw)
     cfg["payment_enabled"] = bool(cfg.get("payment_enabled")) and bool(ZARINPAL_MERCHANT)
     return cfg
 
@@ -133,6 +136,30 @@ def me_json(r) -> dict:
             "pro_plan": r["pro_plan"] or "", "code": r["code"] or "", "referred_by": bool(r["referred_by"])}
 
 
+
+import re as _re
+_SECRET_RE = _re.compile(r"(sk-[A-Za-z0-9_\-]{16,}|AIza[0-9A-Za-z_\-]{20,})")
+
+
+def _looks_secret(v: str) -> bool:
+    return bool(_SECRET_RE.search(v or ""))
+
+
+def _rescue_keys(cfg: dict) -> bool:
+    """کلیدی که اشتباهی در فیلد ai_endpoint گذاشته شده را به ai_key منتقل می‌کند."""
+    ep = str(cfg.get("ai_endpoint") or "")
+    m = _SECRET_RE.search(ep)
+    if not m:
+        return False
+    if not (cfg.get("ai_key") or "").strip():
+        cfg["ai_key"] = m.group(1)
+        if m.group(1).startswith("AIza"):
+            cfg["ai_provider"] = "gemini"
+        elif not cfg.get("ai_provider") or cfg.get("ai_provider") == "free":
+            cfg["ai_provider"] = "openai"
+    cfg["ai_endpoint"] = ""
+    return True
+
 # ------------------------------------------------------------------ API برنامه
 @app.get("/api/config")
 def api_config(device: str = "", v: int = 0):
@@ -143,6 +170,9 @@ def api_config(device: str = "", v: int = 0):
     cfg.pop("answers", None)
     for k in ("ai_key", "ai_base_url", "ai_model", "ai_provider"):
         cfg.pop(k, None)
+    ep = str(cfg.get("ai_endpoint") or "").strip()
+    if not ep.lower().startswith(("http://", "https://")) or _looks_secret(ep):
+        cfg["ai_endpoint"] = ""
     return cfg
 
 
@@ -472,6 +502,7 @@ async def admin_put_config(req: Request, _=Depends(admin)):
     old_key = get_config().get("ai_key", "")
     k = (j.get("ai_key") or "").strip()
     j["ai_key"] = "" if k == "-" else (k or old_key)
+    _rescue_keys(j)
     save_config(j)
     return {"ok": True}
 
