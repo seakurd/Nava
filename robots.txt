@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://seakurd.github.io/Nava/sitemap.xml
