@@ -39,6 +39,9 @@ code{direction:ltr;display:inline-block}
  <h3>آپدیت</h3>
  <div class="row"><div><label>آخرین versionCode</label><input id="up_latest" type="number"></div><div><label>حداقل نسخه‌ی مجاز (اجباری)</label><input id="up_min" type="number"></div></div>
  <label>لینک دانلود نسخه‌ی تازه</label><input id="up_url" dir="ltr"><label>پیام آپدیت</label><input id="up_msg">
+ <div class="row"><div><label>نام نسخه (مثل 4.4.1)</label><input id="up_name" dir="ltr"></div><div><label>لینک مستقیم APK برای آپدیت خودکار (خالی = شاخه‌ی download)</label><input id="up_apk" dir="ltr"></div></div>
+ <label>SHA-256 فایل APK (اختیاری، برای امنیت)</label><input id="up_sha" dir="ltr">
+ <label><input type="checkbox" id="up_auto"> آپدیت خودکار داخل برنامه برای همه (دانلود و نصب خودکار)</label>
  <h3>عمومی</h3><label>پیام خوش‌آمد</label><input id="welcome"><label>لینک دانلود برنامه (برای دعوت‌نامه)</label><input id="download_url" dir="ltr">
  <label>لینک پشتیبانی</label><input id="support_url" dir="ltr">
  <h3>پرچم ویژگی‌ها</h3><div id="features"></div>
@@ -142,7 +145,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.query
  document.querySelectorAll('main section').forEach(s=>s.classList.add('hide'));$(b.dataset.t).classList.remove('hide');({stats:loadStats,ads:loadAds,codes:loadCodes,cardpay:loadManual,super:renderSuper,users:loadUsers,keys:loadKeys,adnet:loadAdnet})[b.dataset.t]?.()});
 async function loadConfig(){C=await api('/admin/api/config');const a=C.announcement||{},u=C.update||{};
  $('ann_active').checked=!!a.active;$('ann_title').value=a.title||'';$('ann_text').value=a.text||'';$('ann_url').value=a.url||'';
- $('up_latest').value=u.latest_version||0;$('up_min').value=u.min_version||0;$('up_url').value=u.url||'';$('up_msg').value=u.message||'';
+ $('up_latest').value=u.latest_version||0;$('up_min').value=u.min_version||0;$('up_url').value=u.url||'';$('up_msg').value=u.message||'';$('up_name').value=u.latest_name||C.latest_name||'';$('up_apk').value=u.apk_url||'';$('up_sha').value=u.sha256||'';$('up_auto').checked=u.auto!==false;
  ['welcome','download_url','support_url','ad_every_n','ad_skip_seconds','referral_days','pro_invites','card_number','card_holder','sheba','ai_endpoint','ai_provider','ai_model','ai_base_url'].forEach(k=>$(k).value=C[k]??'');$('ai_provider').value=C.ai_provider||'free';$('ai_key').value='';$('aiKeyHint').textContent=C._ai_key_hint?('ذخیره‌شده: '+C._ai_key_hint):'';
  $('ads_enabled').checked=!!C.ads_enabled;$('payment_enabled').checked=!!C.payment_enabled;
  $('zpInfo').textContent=C._zarinpal_ready?'درگاه زرین‌پال واقعی آماده است.':(C._zarinpal_sandbox?'درگاه زرین‌پال در حالت آزمایشی (sandbox) است؛ مرچنت را در ناوا ادمین بگذارید تا واقعی شود.':'درگاه خاموش است.');
@@ -150,7 +153,7 @@ async function loadConfig(){C=await api('/admin/api/config');const a=C.announcem
  renderPlans();renderCmds();renderAns();$('jokes').value=(C.jokes||[]).join('\n');$('rawJson').value=JSON.stringify(C,null,2)}
 async function put(){delete C._zarinpal_ready;delete C._ai_key_hint;await api('/admin/api/config','PUT',C);toast('ذخیره شد');await loadConfig()}
 function saveGeneral(){C.announcement={active:$('ann_active').checked,id:String(Date.now()),title:$('ann_title').value,text:$('ann_text').value,url:$('ann_url').value};
- C.update={latest_version:+$('up_latest').value,min_version:+$('up_min').value,url:$('up_url').value,message:$('up_msg').value};
+ C.update=Object.assign({},C.update||{},{latest_version:+$('up_latest').value,min_version:+$('up_min').value,url:$('up_url').value,message:$('up_msg').value,latest_name:$('up_name').value.trim(),apk_url:$('up_apk').value.trim(),sha256:$('up_sha').value.trim().toLowerCase(),auto:$('up_auto').checked});if(C.update.latest_name)C.latest_name=C.update.latest_name;
  ['welcome','download_url','support_url'].forEach(k=>C[k]=$(k).value);document.querySelectorAll('[data-f]').forEach(x=>C.features[x.dataset.f]=x.checked);put()}
 function renderPlans(){$('plansTbl').innerHTML='<tr><th>شناسه</th><th>عنوان</th><th>قیمت (تومان)</th><th>روز</th><th>برچسب</th><th></th></tr>'+(C.plans||[]).map((p,i)=>
  `<tr>${['id','title','price','days','badge'].map(k=>`<td><input data-p="${i}" data-k="${k}" value="${esc(p[k])}"></td>`).join('')}<td><button class="btn red" onclick="C.plans.splice(${i},1);renderPlans()">✕</button></td></tr>`).join('')}

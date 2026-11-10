@@ -152,7 +152,7 @@ def _migrate():
 
 _migrate()
 START_TIME = time.time()
-LATEST_DEFAULT = "4.4.0"
+LATEST_DEFAULT = "4.4.1"
 persist.start(DB, _lock)
 now_ms = lambda: int(time.time() * 1000)
 
@@ -194,6 +194,19 @@ def get_config() -> dict:
             up["message"] = "ناوا ۴٫۴ آمد: سورانی و کرمانجی، صدای کردی، بیدارباش هوشمند بدون بوق، پاداش پرو با تماشای آگهی."
             raw["update"] = up
             raw["_v44"] = True
+            changed = True
+        if not raw.get("_v441"):
+            # ۴٫۴٫۱: آپدیت خودکار داخل برنامه
+            raw["latest_name"] = LATEST_DEFAULT
+            up = dict(raw.get("update") or {})
+            up["latest_version"] = max(int(up.get("latest_version") or 0), 13)
+            up["latest_name"] = LATEST_DEFAULT
+            up["apk_url"] = "https://github.com/seakurd/Nava/raw/download/Nava-4.4.1.apk"
+            up["sha256"] = "fefd7361ccd0311d4459571f1c9c0d6655aece834bb9fdedade8295d78194824"
+            up["auto"] = True
+            up["message"] = "ناوا ۴٫۴٫۱: از این به بعد آپدیت‌ها خودکار داخل برنامه دانلود و نصب می‌شوند."
+            raw["update"] = up
+            raw["_v441"] = True
             changed = True
         if changed:
             save_config(raw)
