@@ -1,0 +1,18 @@
+name: keep-nava-awake
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping Nava server
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 60 https://nava-server-irc5.onrender.com/health) && echo "health=$code"
+            [ "$code" = "200" ] && exit 0
+            sleep 15
+          done
+          echo "server not healthy"; exit 1
