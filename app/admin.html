@@ -25,7 +25,7 @@ code{direction:ltr;display:inline-block}
 <header>🎙 پنل مدیریت ناوا</header>
 <nav>
  <button data-t="stats" class="on">آمار</button><button data-t="general">تنظیمات کلی</button><button data-t="money">تبلیغ و اشتراک</button><button data-t="cardpay">پرداخت‌های کارتی</button>
- <button data-t="ads">تبلیغ‌ها</button><button data-t="codes">کدهای پرو</button><button data-t="content">محتوا و فرمان‌ها</button><button data-t="super">پرو و هوش مصنوعی ✦</button><button data-t="users">کاربران</button><button data-t="raw">JSON خام</button>
+ <button data-t="ads">تبلیغ‌ها</button><button data-t="codes">کدهای پرو</button><button data-t="content">محتوا و فرمان‌ها</button><button data-t="super">پرو و هوش مصنوعی ✦</button><button data-t="keys">استخر کلید AI 🛡</button><button data-t="adnet">تبلیغ و سایت ۴٫۴</button><button data-t="users">کاربران</button><button data-t="raw">JSON خام</button>
 </nav>
 <main>
 <section id="stats"><div class="card"><div class="grid" id="statGrid"></div></div>
@@ -105,6 +105,30 @@ code{direction:ltr;display:inline-block}
  <div class="row"><div><label>شناسه‌ی دستگاه یا کد دعوت</label><input id="u_q" dir="ltr"></div><div><label>&nbsp;</label><button class="btn alt" onclick="loadUsers()">جستجو</button></div></div>
  <table id="usersTbl"></table></div></section>
 
+<section id="keys" class="hide"><div class="card"><h3>ربات نگهبان کلیدها</h3>
+ <p class="muted">هر ۵ دقیقه همه‌ی کلیدها تست می‌شوند؛ کلید خراب یا سهمیه‌تمام کنار می‌رود، مدل از /models به‌روز می‌شود و درخواست‌ها بین کلیدهای سالم می‌چرخند. اگر هیچ کلیدی سالم نباشد، مغز رایگان کار می‌کند. کلید تازه را خودتان از سایت ارائه‌دهنده بسازید و اینجا اضافه کنید.</p>
+ <div class="row"><div><label>کلید API</label><input id="k_key" dir="ltr" placeholder="AIza… / gsk_… / sk-or-… / sk-…"></div>
+ <div><label>ارائه‌دهنده</label><select id="k_prov"><option value="">تشخیص خودکار</option><option>gemini</option><option>groq</option><option>openrouter</option><option>openai</option><option>deepseek</option><option>mistral</option><option>together</option><option>custom</option></select></div></div>
+ <div class="row"><div><label>نام (اختیاری)</label><input id="k_label"></div><div><label>مدل (خالی = خودکار)</label><input id="k_model" dir="ltr"></div><div><label>آدرس پایه (فقط custom)</label><input id="k_base" dir="ltr"></div><div><label>اولویت (۱ بالاتر)</label><input id="k_pri" type="number" value="5"></div></div>
+ <button class="btn" onclick="addKey()">افزودن و تست</button> <button class="btn alt" onclick="checkKeys()">تست همه همین حالا</button>
+ <div id="keySum" class="muted" style="margin-top:8px"></div></div>
+ <div class="card"><table id="keysTbl"></table></div>
+ <div class="card"><h3>هشدارها</h3><button class="btn alt" onclick="api('/admin/api/keys_alerts','DELETE').then(loadKeys)">پاک کردن</button><table id="alertsTbl"></table></div></section>
+
+<section id="adnet" class="hide"><div class="card"><h3>تبلیغ داخل اپ (تپسل)</h3>
+ <div class="row"><div class="chk"><input type="checkbox" id="banner_enabled"><span>بنر تپسل برای کاربران غیرپرو</span></div><div class="chk"><input type="checkbox" id="reward_ad_enabled"><span>ویدیوی پاداش‌دار = زمان پرو</span></div></div>
+ <div class="row"><div><label>دقیقه‌ی پرو برای هر ویدیو</label><input id="reward_ad_minutes" type="number"></div><div><label>سقف ویدیو در روز</label><input id="reward_ad_daily" type="number"></div><div><label>صفحه‌های بنر (با کاما)</label><input id="banner_pages" dir="ltr"></div></div>
+ <div class="row"><div><label>زون پاداش‌دار تپسل</label><input id="tp_rewarded" dir="ltr"></div><div><label>زون بنر تپسل</label><input id="tp_banner" dir="ltr"></div></div>
+ <h3>AdMob / AdSense (پشت پرچم)</h3>
+ <p class="muted">AdMob: نیاز به حساب AdMob با آدرس پرداخت خارج از ایران و بیلد با SDK گوگل. AdSense: نیاز به دامنه‌ی تأییدشده و حساب AdSense. تا شناسه‌ها پر نشوند خاموش می‌مانند.</p>
+ <div class="row"><div class="chk"><input type="checkbox" id="admob_enabled"><span>AdMob</span></div><div><label>App ID</label><input id="admob_app_id" dir="ltr"></div><div><label>Banner unit</label><input id="admob_banner" dir="ltr"></div><div><label>Rewarded unit</label><input id="admob_rewarded" dir="ltr"></div></div>
+ <div class="row"><div class="chk"><input type="checkbox" id="adsense_enabled"><span>AdSense روی سایت</span></div><div><label>ca-pub</label><input id="adsense_client" dir="ltr"></div><div><label>slot</label><input id="adsense_slot" dir="ltr"></div></div>
+ <h3>جایگاه تبلیغ سایت</h3>
+ <div class="row"><div class="chk"><input type="checkbox" id="sa_enabled"><span>نمایش</span></div><div><label>عنوان</label><input id="sa_title"></div><div><label>متن</label><input id="sa_body"></div></div>
+ <div class="row"><div><label>تصویر</label><input id="sa_img" dir="ltr"></div><div><label>لینک</label><input id="sa_url" dir="ltr"></div><div><label>دکمه</label><input id="sa_cta"></div></div>
+ <button class="btn" onclick="saveAdnet()">ذخیره</button></div>
+ <div class="card"><h3>آمار سایت و پاداش (۱۴ روز)</h3><div id="siteSum" class="muted"></div><table id="siteTbl"></table></div></section>
+
 <section id="raw" class="hide"><div class="card"><p class="muted">ویرایش مستقیم همه‌ی تنظیمات. با احتیاط!</p>
  <textarea id="rawJson" dir="ltr" style="min-height:420px;font-family:monospace"></textarea><button class="btn" onclick="saveRaw()">ذخیره</button></div></section>
 </main>
@@ -115,7 +139,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const api=async(u,m='GET',b)=>{const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});if(!r.ok)throw new Error(await r.text());return r.json()};
 const toast=t=>{$('toast').textContent=t;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',2200)};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
- document.querySelectorAll('main section').forEach(s=>s.classList.add('hide'));$(b.dataset.t).classList.remove('hide');({stats:loadStats,ads:loadAds,codes:loadCodes,cardpay:loadManual,super:renderSuper,users:loadUsers})[b.dataset.t]?.()});
+ document.querySelectorAll('main section').forEach(s=>s.classList.add('hide'));$(b.dataset.t).classList.remove('hide');({stats:loadStats,ads:loadAds,codes:loadCodes,cardpay:loadManual,super:renderSuper,users:loadUsers,keys:loadKeys,adnet:loadAdnet})[b.dataset.t]?.()});
 async function loadConfig(){C=await api('/admin/api/config');const a=C.announcement||{},u=C.update||{};
  $('ann_active').checked=!!a.active;$('ann_title').value=a.title||'';$('ann_text').value=a.text||'';$('ann_url').value=a.url||'';
  $('up_latest').value=u.latest_version||0;$('up_min').value=u.min_version||0;$('up_url').value=u.url||'';$('up_msg').value=u.message||'';
@@ -178,5 +202,32 @@ const ST={pending:'در انتظار',approved:'تأیید شد',rejected:'رد 
 async function loadManual(){const r=await api('/admin/api/manual');$('manualTbl').innerHTML='<tr><th>زمان</th><th>طرح</th><th>مبلغ (تومان)</th><th>۴ رقم آخر</th><th>کد پیگیری</th><th>دستگاه</th><th>وضعیت</th><th></th></tr>'+r.map(m=>`<tr><td>${new Date(m.created).toLocaleString('fa-IR')}</td><td>${esc(m.plan)}</td><td>${(+m.amount).toLocaleString('fa-IR')}</td><td dir="ltr">${esc(m.last4)}</td><td dir="ltr">${esc(m.ref)}</td><td dir="ltr" style="font-size:11px">${esc(m.device).slice(0,10)}</td><td>${ST[m.status]||m.status}</td><td>${m.status=='pending'?`<button class="btn" onclick="decide(${m.id},'approve')">تأیید</button> <button class="btn alt" onclick="decide(${m.id},'reject')">رد</button>`:''}</td></tr>`).join('')}
 async function decide(id,d){if(d=='reject'&&!confirm('رد شود؟'))return;await api('/admin/api/manual/'+id+'/'+d,'POST');toast(d=='approve'?'اشتراک فعال شد':'رد شد');loadManual()}
 loadConfig();loadStats();
+
+// ---------- ۴٫۴: استخر کلید
+const ST={ok:'✅ سالم',bad:'⛔ نامعتبر',quota:'⏳ سهمیه',error:'⚠️ خطا',unknown:'… نامشخص'};
+const fa=n=>new Date(n).toLocaleString('fa-IR');
+async function loadKeys(){const d=await api('/admin/api/keys');
+ $('keySum').textContent=`${d.healthy} کلید سالم از ${d.keys.length}`+(d.keys.length&&!d.healthy?' — ناوا الان روی مغز رایگان است.':'');
+ $('keysTbl').innerHTML='<tr><th>نام</th><th>ارائه‌دهنده</th><th>کلید</th><th>مدل</th><th>وضعیت</th><th>تأخیر</th><th>استفاده</th><th>آخرین تست</th><th></th></tr>'+d.keys.map(k=>
+ `<tr><td>${esc(k.label||'')}</td><td>${esc(k.provider)}</td><td><code>${esc(k.key_mask)}</code></td><td><code>${esc(k.model||'')}</code></td><td title="${esc(k.last_error||'')}">${ST[k.status]||esc(k.status)}${k.last_error?'<br><small class="muted">'+esc(k.last_error)+'</small>':''}</td><td>${k.latency_ms||'—'}ms</td><td>${k.uses||0}/${k.uses_fail||0}</td><td>${k.last_check?fa(k.last_check):'—'}</td>
+ <td><button class="btn alt" onclick="toggleKey('${k.id}',${!k.enabled})">${k.enabled?'خاموش':'روشن'}</button> <button class="btn red" onclick="delKey('${k.id}')">✕</button></td></tr>`).join('');
+ $('alertsTbl').innerHTML=(d.alerts||[]).map(a=>`<tr><td>${fa(a.ts)}</td><td>${a.level=='error'?'🔴':a.level=='warn'?'🟠':'🔵'} ${esc(a.msg)}</td></tr>`).join('')||'<tr><td class="muted">هشداری نیست.</td></tr>'}
+async function addKey(){try{const r=await api('/admin/api/keys','POST',{key:$('k_key').value.trim(),provider:$('k_prov').value,label:$('k_label').value,model:$('k_model').value,base_url:$('k_base').value,priority:+$('k_pri').value||5});
+ $('k_key').value='';toast('اضافه شد: '+(ST[r.key.status]||r.key.status));loadKeys()}catch(e){toast('خطا: '+e.message)}}
+async function checkKeys(){toast('در حال تست…');await api('/admin/api/keys/check','POST');loadKeys();toast('تست شد')}
+async function toggleKey(id,on){await api('/admin/api/keys','POST',{id,enabled:on});loadKeys()}
+async function delKey(id){if(confirm('این کلید حذف شود؟')){await api('/admin/api/keys/'+id,'DELETE');loadKeys()}}
+// ---------- ۴٫۴: تبلیغ و سایت
+async function loadAdnet(){const t=C.tapsell||{},sa=C.site_ad||{};
+ ['banner_enabled','reward_ad_enabled','admob_enabled','adsense_enabled'].forEach(k=>$(k).checked=!!C[k]);
+ ['reward_ad_minutes','reward_ad_daily','admob_app_id','admob_banner','admob_rewarded','adsense_client','adsense_slot'].forEach(k=>$(k).value=C[k]??'');
+ $('banner_pages').value=(C.banner_pages||[]).join(',');$('tp_rewarded').value=t.rewarded_zone||'';$('tp_banner').value=t.banner_zone||'';
+ $('sa_enabled').checked=!!sa.enabled;$('sa_title').value=sa.title||'';$('sa_body').value=sa.body||'';$('sa_img').value=sa.image_url||'';$('sa_url').value=sa.click_url||'';$('sa_cta').value=sa.cta||'';
+ try{const s=await api('/admin/api/site');$('siteSum').textContent=`بازدید کل سایت: ${s.visits} — دانلود کل: ${s.downloads} — زبان‌ها: فارسی ${s.langs.fa}، سورانی ${s.langs.ckb}، کرمانجی ${s.langs.kmr}، انگلیسی ${s.langs.en}`;
+ $('siteTbl').innerHTML='<tr><th>روز</th><th>بازدید</th><th>دانلود</th><th>پاداش آگهی</th></tr>'+s.days.map(d=>`<tr><td>${d.day}</td><td>${d.visits}</td><td>${d.downloads}</td><td>${d.rewards}</td></tr>`).join('')}catch(e){}}
+function saveAdnet(){['banner_enabled','reward_ad_enabled','admob_enabled','adsense_enabled'].forEach(k=>C[k]=$(k).checked);
+ ['reward_ad_minutes','reward_ad_daily'].forEach(k=>C[k]=+$(k).value);['admob_app_id','admob_banner','admob_rewarded','adsense_client','adsense_slot'].forEach(k=>C[k]=$(k).value.trim());
+ C.banner_pages=$('banner_pages').value.split(',').map(x=>x.trim()).filter(Boolean);C.tapsell={...(C.tapsell||{}),rewarded_zone:$('tp_rewarded').value.trim(),banner_zone:$('tp_banner').value.trim()};
+ C.site_ad={enabled:$('sa_enabled').checked,title:$('sa_title').value,body:$('sa_body').value,image_url:$('sa_img').value.trim(),click_url:$('sa_url').value.trim(),cta:$('sa_cta').value};put()}
 </script>
 </body></html>

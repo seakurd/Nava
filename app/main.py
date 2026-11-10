@@ -59,7 +59,16 @@ DEFAULT_CONFIG = {
     # فکر عمیق
     "thinking_free_model": "gpt-oss:20b",    # مدل استدلالی رایگان LLM7 برای «فکر عمیق» بدون کلید
     # نسخه‌ی ادمین
-    "admin_latest_name": "2.2.0", "admin_latest_code": 5,
+    "admin_latest_name": "2.3.0", "admin_latest_code": 6,
+    # ۴٫۴: تبلیغ و پاداش
+    "reward_ad_enabled": True, "reward_ad_minutes": 30, "reward_ad_daily": 4,   # تماشای کامل ویدیو = دقیقه‌ی پرو
+    "banner_enabled": True, "banner_pages": ["home", "chat", "tools", "settings"],
+    "admob_enabled": False, "admob_app_id": "", "admob_banner": "", "admob_rewarded": "",   # نیاز: حساب AdMob + بیلد با SDK گوگل
+    "adsense_enabled": False, "adsense_client": "", "adsense_slot": "",                  # سایت: نیاز به تأیید دامنه در AdSense
+    "site_ad": {"enabled": True, "title": "ناوا پرو", "body": "بدون آگهی، مغز سریع و همه‌ی امکانات؛ ماهی ۱۲٬۰۰۰ تومان.",
+                "image_url": "", "click_url": "https://nava-server-irc5.onrender.com/dl", "cta": "دانلود ناوا"},
+    "site_url": "https://seakurd.github.io/Nava/",
+    "kurdish_tts_base": "",                  # خالی = شاخه‌ی models مخزن
     "payment_enabled": True,
     "card_number": "", "card_holder": "پیام باب", "sheba": "IR580560611828006998292102",   # پرداخت کارت‌به‌کارت (تأیید دستی در پنل)
     "ai_endpoint": "",                       # خالی = مغز پیش‌فرض داخل اپ
@@ -67,7 +76,7 @@ DEFAULT_CONFIG = {
     "ai_provider": "free",                   # free | openai | gemini | custom
     "ai_key": "", "ai_model": "", "ai_base_url": "",
     "ai_pro_only": False,
-    "latest_name": "4.3.0",
+    "latest_name": "4.4.0",
     "maintenance": False, "maintenance_message": "",  # حالت تعمیر: اپ پیام را نشان می‌دهد                  # نام نسخه‌ی APK روی شاخه‌ی download (برای /dl)                    # true = مغز سریع سرور فقط برای کاربران پرو
     "free_images_per_day": 10,               # سقف تصویرسازی رایگان روزانه در اپ (پرو نامحدود)
     "personas": [],                          # دستیارهای تخصصی اضافه: [{"id","title","emoji","prompt","pro"}]
@@ -143,7 +152,7 @@ def _migrate():
 
 _migrate()
 START_TIME = time.time()
-LATEST_DEFAULT = "4.3.0"
+LATEST_DEFAULT = "4.4.0"
 persist.start(DB, _lock)
 now_ms = lambda: int(time.time() * 1000)
 
@@ -176,6 +185,15 @@ def get_config() -> dict:
             raw["update"] = up
             raw["payment_enabled"] = True   # درگاه (آزمایشی تا وقتی مرچنت گذاشته شود)
             raw["_v43"] = True
+            changed = True
+        if not raw.get("_v44"):
+            raw["latest_name"] = LATEST_DEFAULT
+            raw["admin_latest_name"] = DEFAULT_CONFIG["admin_latest_name"]; raw["admin_latest_code"] = DEFAULT_CONFIG["admin_latest_code"]
+            up = dict(raw.get("update") or {})
+            up["latest_version"] = max(int(up.get("latest_version") or 0), 12)
+            up["message"] = "ناوا ۴٫۴ آمد: سورانی و کرمانجی، صدای کردی، بیدارباش هوشمند بدون بوق، پاداش پرو با تماشای آگهی."
+            raw["update"] = up
+            raw["_v44"] = True
             changed = True
         if changed:
             save_config(raw)
@@ -426,12 +444,17 @@ def ai_target(cfg: dict):
     return f"{base}/chat/completions", {"Authorization": f"Bearer {key}"}, model
 
 
+_last_status = {"code": 0}
+
+
 async def _proxy(url: str, headers: dict, body: dict):
+    _last_status["code"] = 0
     """درخواست را می‌فرستد؛ اگر stream بود جواب را تکه‌تکه رد می‌کند. خطا قبل از شروع = None."""
     if body.get("stream"):
         req = _ai_client.build_request("POST", url, json=body, headers=headers)
         r = await _ai_client.send(req, stream=True)
         if r.status_code != 200:
+            _last_status["code"] = r.status_code
             await r.aclose()
             return None
 
@@ -445,6 +468,7 @@ async def _proxy(url: str, headers: dict, body: dict):
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
     r = await _ai_client.post(url, json=body, headers=headers)
     if r.status_code != 200:
+        _last_status["code"] = r.status_code
         return None
     return Response(content=r.content, status_code=200, media_type="application/json")
 
@@ -470,8 +494,12 @@ async def api_ai(request: Request, device: str = ""):
     t = ai_target(cfg)
     if t and cfg.get("ai_pro_only") and not _is_pro(device):
         t = None
+    targets = []
+    if not (cfg.get("ai_pro_only") and not _is_pro(device)):
+        targets = v44.pool_targets()          # ۴٫۴: استخر کلیدهای سالم (نگهبان)
     if t:
-        url, headers, model = t
+        targets.append((*t, None))
+    for url, headers, model, pool_id in targets:
         clean = {k: body[k] for k in ALLOWED_KEYS if k in body}
         clean["model"] = model
         variants = [clean]
@@ -483,14 +511,19 @@ async def api_ai(request: Request, device: str = ""):
             variants = [v]
         minimal = {k: clean[k] for k in ("model", "messages", "stream", "tools", "tool_choice") if k in clean}
         variants.append(minimal)
+        ok = False
         for v in variants:
             try:
                 res = await _proxy(url, headers, v)
                 if res is not None:
-                    _ai_log(True, t0, "key")
+                    _ai_log(True, t0, "pool" if pool_id else "key")
+                    if pool_id:
+                        v44.report_ok(pool_id)
                     return res
             except Exception:
                 pass
+        if pool_id:
+            v44.report_failure(pool_id, _last_status.get("code", 0))
     # مغز رایگان: LLM7 (سریع، ابزار) ← Pollinations (کند ولی همیشگی)
     free = {k: body[k] for k in ALLOWED_KEYS if k in body}
     for i, model in enumerate(("default", "fast")):
@@ -1476,3 +1509,8 @@ app.mount("/app", StaticFiles(directory=Path(__file__).parent / "web", html=True
 @app.get("/")
 def root():
     return RedirectResponse("/app/")
+
+
+# ------------------------------------------------------------------ ۴٫۴
+from app import v44
+v44.setup(app)
