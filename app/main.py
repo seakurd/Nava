@@ -61,7 +61,8 @@ DEFAULT_CONFIG = {
     # نسخه‌ی ادمین
     "admin_latest_name": "2.3.0", "admin_latest_code": 6,
     # ۴٫۴: تبلیغ و پاداش
-    "reward_ad_enabled": True, "reward_ad_minutes": 30, "reward_ad_daily": 4,   # تماشای کامل ویدیو = دقیقه‌ی پرو
+    "reward_ad_enabled": True, "reward_ad_minutes": 30, "reward_ad_daily": 12,
+    "reward_ad_needed": 12, "reward_ad_pro_hours": 24,   # ۱۲ ویدیوی کامل = پرو به مدت تعیین‌شده توسط ادمین
     "banner_enabled": True, "banner_pages": ["home", "chat", "tools", "settings"],
     "admob_enabled": False, "admob_app_id": "", "admob_banner": "", "admob_rewarded": "",   # نیاز: حساب AdMob + بیلد با SDK گوگل
     "adsense_enabled": False, "adsense_client": "", "adsense_slot": "",                  # سایت: نیاز به تأیید دامنه در AdSense

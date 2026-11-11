@@ -120,7 +120,7 @@ code{direction:ltr;display:inline-block}
 
 <section id="adnet" class="hide"><div class="card"><h3>تبلیغ داخل اپ (تپسل)</h3>
  <div class="row"><div class="chk"><input type="checkbox" id="banner_enabled"><span>بنر تپسل برای کاربران غیرپرو</span></div><div class="chk"><input type="checkbox" id="reward_ad_enabled"><span>ویدیوی پاداش‌دار = زمان پرو</span></div></div>
- <div class="row"><div><label>دقیقه‌ی پرو برای هر ویدیو</label><input id="reward_ad_minutes" type="number"></div><div><label>سقف ویدیو در روز</label><input id="reward_ad_daily" type="number"></div><div><label>صفحه‌های بنر (با کاما)</label><input id="banner_pages" dir="ltr"></div></div>
+ <div class="row"><div><label>تعداد آگهی تا پرو</label><input id="reward_ad_needed" type="number"></div><div><label>مدت پرو بعد از آن (ساعت)</label><input id="reward_ad_pro_hours" type="number" step="0.5"></div><div><label>سقف ویدیو در روز</label><input id="reward_ad_daily" type="number"></div><div><label>صفحه‌های بنر (با کاما)</label><input id="banner_pages" dir="ltr"></div></div>
  <div class="row"><div><label>زون پاداش‌دار تپسل</label><input id="tp_rewarded" dir="ltr"></div><div><label>زون بنر تپسل</label><input id="tp_banner" dir="ltr"></div></div>
  <h3>AdMob / AdSense (پشت پرچم)</h3>
  <p class="muted">AdMob: نیاز به حساب AdMob با آدرس پرداخت خارج از ایران و بیلد با SDK گوگل. AdSense: نیاز به دامنه‌ی تأییدشده و حساب AdSense. تا شناسه‌ها پر نشوند خاموش می‌مانند.</p>
@@ -223,13 +223,13 @@ async function delKey(id){if(confirm('این کلید حذف شود؟')){await a
 // ---------- ۴٫۴: تبلیغ و سایت
 async function loadAdnet(){const t=C.tapsell||{},sa=C.site_ad||{};
  ['banner_enabled','reward_ad_enabled','admob_enabled','adsense_enabled'].forEach(k=>$(k).checked=!!C[k]);
- ['reward_ad_minutes','reward_ad_daily','admob_app_id','admob_banner','admob_rewarded','adsense_client','adsense_slot'].forEach(k=>$(k).value=C[k]??'');
+ ['reward_ad_needed','reward_ad_pro_hours','reward_ad_daily','admob_app_id','admob_banner','admob_rewarded','adsense_client','adsense_slot'].forEach(k=>$(k).value=C[k]??'');
  $('banner_pages').value=(C.banner_pages||[]).join(',');$('tp_rewarded').value=t.rewarded_zone||'';$('tp_banner').value=t.banner_zone||'';
  $('sa_enabled').checked=!!sa.enabled;$('sa_title').value=sa.title||'';$('sa_body').value=sa.body||'';$('sa_img').value=sa.image_url||'';$('sa_url').value=sa.click_url||'';$('sa_cta').value=sa.cta||'';
  try{const s=await api('/admin/api/site');$('siteSum').textContent=`بازدید کل سایت: ${s.visits} — دانلود کل: ${s.downloads} — زبان‌ها: فارسی ${s.langs.fa}، سورانی ${s.langs.ckb}، کرمانجی ${s.langs.kmr}، انگلیسی ${s.langs.en}`;
  $('siteTbl').innerHTML='<tr><th>روز</th><th>بازدید</th><th>دانلود</th><th>پاداش آگهی</th></tr>'+s.days.map(d=>`<tr><td>${d.day}</td><td>${d.visits}</td><td>${d.downloads}</td><td>${d.rewards}</td></tr>`).join('')}catch(e){}}
 function saveAdnet(){['banner_enabled','reward_ad_enabled','admob_enabled','adsense_enabled'].forEach(k=>C[k]=$(k).checked);
- ['reward_ad_minutes','reward_ad_daily'].forEach(k=>C[k]=+$(k).value);['admob_app_id','admob_banner','admob_rewarded','adsense_client','adsense_slot'].forEach(k=>C[k]=$(k).value.trim());
+ ['reward_ad_needed','reward_ad_pro_hours','reward_ad_daily'].forEach(k=>C[k]=+$(k).value);['admob_app_id','admob_banner','admob_rewarded','adsense_client','adsense_slot'].forEach(k=>C[k]=$(k).value.trim());
  C.banner_pages=$('banner_pages').value.split(',').map(x=>x.trim()).filter(Boolean);C.tapsell={...(C.tapsell||{}),rewarded_zone:$('tp_rewarded').value.trim(),banner_zone:$('tp_banner').value.trim()};
  C.site_ad={enabled:$('sa_enabled').checked,title:$('sa_title').value,body:$('sa_body').value,image_url:$('sa_img').value.trim(),click_url:$('sa_url').value.trim(),cta:$('sa_cta').value};put()}
 </script>

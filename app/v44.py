@@ -404,30 +404,42 @@ def setup(app):
         if not device:
             raise HTTPException(400, "device")
         cfg = m.get_config()
-        minutes = int(cfg.get("reward_ad_minutes", 30))
-        cap = int(cfg.get("reward_ad_daily", 4))
-        if not cfg.get("reward_ad_enabled", True) or minutes <= 0:
+        need = max(1, int(cfg.get("reward_ad_needed", 12)))      # چند آگهی تا یک بار پرو
+        hours = float(cfg.get("reward_ad_pro_hours", 24))        # مدت پرو بعد از کامل شدن (ادمین تعیین می‌کند)
+        cap = int(cfg.get("reward_ad_daily", 12))
+        if not cfg.get("reward_ad_enabled", True) or hours <= 0:
             return {"ok": False, "msg": "پاداش آگهی فعلاً خاموش است."}
         day = time.strftime("%Y%m%d", time.gmtime())
-        k, kl = f"rw_{day}_{device}", f"rwl_{device}"
+        k, kl, kp = f"rw_{day}_{device}", f"rwl_{device}", f"rwp_{device}"
         with m.db() as c:
             n = int(m._kv_get(c, k))
             last = int(m._kv_get(c, kl))
+            prog = int(m._kv_get(c, kp))
             nowms = m.now_ms()
-            if n >= cap:
-                return {"ok": False, "msg": f"سقف پاداش امروز ({cap} آگهی) پر شد. فردا دوباره.", "left": 0}
-            if nowms - last < 45_000:
-                return {"ok": False, "msg": "کمی صبر کنید و دوباره امتحان کنید.", "left": cap - n}
+            if cap > 0 and n >= cap:
+                return {"ok": False, "msg": f"سقف آگهی امروز ({cap}) پر شد. فردا ادامه بدهید. ({prog} از {need})",
+                        "left": 0, "progress": prog, "needed": need}
+            if nowms - last < 20_000:
+                return {"ok": False, "msg": "کمی صبر کنید و دوباره امتحان کنید.", "left": max(0, cap - n),
+                        "progress": prog, "needed": need}
             m.touch_device(c, device)
-            m.extend_pro(c, device, minutes / 1440.0, "reward_ad")
+            prog += 1
+            granted = prog >= need
+            if granted:
+                m.extend_pro(c, device, hours / 24.0, "reward_ad")
+                prog = 0
             c.execute("INSERT OR REPLACE INTO kv VALUES(?, ?)", (k, str(n + 1)))
             c.execute("INSERT OR REPLACE INTO kv VALUES(?, ?)", (kl, str(nowms)))
+            c.execute("INSERT OR REPLACE INTO kv VALUES(?, ?)", (kp, str(prog)))
             dk = "rw_total_" + day
             c.execute("INSERT OR REPLACE INTO kv VALUES(?, ?)", (dk, str(int(m._kv_get(c, dk)) + 1)))
             r = c.execute("SELECT * FROM devices WHERE id=?", (device,)).fetchone()
             me = m.me_json(r, c) if r else {}
-        return {"ok": True, "minutes": minutes, "left": cap - n - 1, "me": me,
-                "msg": f"{minutes} دقیقه ناوا پرو هدیه گرفتید 🎉"}
+        hs = f"{int(hours)} ساعت" if hours == int(hours) else f"{hours} ساعت"
+        msg = (f"{need} آگهی کامل شد؛ {hs} ناوا پرو فعال شد 🎉" if granted
+               else f"آگهی {prog} از {need} ثبت شد. {need - prog} آگهی دیگر تا پرو.")
+        return {"ok": True, "granted": granted, "minutes": int(hours * 60) if granted else 0,
+                "progress": prog, "needed": need, "left": max(0, cap - n - 1), "me": me, "msg": msg}
 
     # ---------- سایت: شمارنده و تبلیغ
     @app.post("/api/site/hit")
