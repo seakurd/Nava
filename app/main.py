@@ -76,7 +76,7 @@ DEFAULT_CONFIG = {
     "ai_provider": "free",                   # free | openai | gemini | custom
     "ai_key": "", "ai_model": "", "ai_base_url": "",
     "ai_pro_only": False,
-    "latest_name": "4.4.0",
+    "latest_name": "4.4.1",
     "maintenance": False, "maintenance_message": "",  # حالت تعمیر: اپ پیام را نشان می‌دهد                  # نام نسخه‌ی APK روی شاخه‌ی download (برای /dl)                    # true = مغز سریع سرور فقط برای کاربران پرو
     "free_images_per_day": 10,               # سقف تصویرسازی رایگان روزانه در اپ (پرو نامحدود)
     "personas": [],                          # دستیارهای تخصصی اضافه: [{"id","title","emoji","prompt","pro"}]
@@ -207,6 +207,16 @@ def get_config() -> dict:
             up["message"] = "ناوا ۴٫۴٫۱: از این به بعد آپدیت‌ها خودکار داخل برنامه دانلود و نصب می‌شوند."
             raw["update"] = up
             raw["_v441"] = True
+            changed = True
+        if not raw.get("_v441b"):
+            # دانلود از خود سرور (گیت‌هاب در ایران فیلتر/کند است)
+            up = dict(raw.get("update") or {})
+            base = PUBLIC_URL or "https://nava-server-irc5.onrender.com"
+            if "github.com" in str(up.get("apk_url") or "") or not up.get("apk_url"):
+                up["apk_url"] = f"{base}/apk/Nava-{raw.get('latest_name') or LATEST_DEFAULT}.apk"
+            raw["update"] = up
+            raw["site_url"] = base + "/site/"
+            raw["_v441b"] = True
             changed = True
         if changed:
             save_config(raw)
@@ -849,7 +859,7 @@ def download(request: Request):
             c.execute("INSERT OR REPLACE INTO kv VALUES(?, ?)", ("dl_" + day, str(dn)))
     except Exception:
         pass
-    return RedirectResponse(f"https://github.com/seakurd/Nava/raw/download/Nava-{latest}.apk", status_code=302)
+    return RedirectResponse(f"/apk/Nava-{latest}.apk", status_code=302)
 
 
 @app.get("/api/stats")
@@ -865,16 +875,52 @@ def public_stats():
 
 
 # ------------------------------------------------------------------ پنل مدیریت
-security = HTTPBasic()
+security = HTTPBasic(auto_error=False)
+_ADMIN_COOKIE = "nava_admin"
 
 
-def admin(cred: HTTPBasicCredentials = Depends(security)):
+def _admin_token() -> str:
+    import hmac
+    return hmac.new(ADMIN_PASSWORD.encode(), b"nava-admin-session-v1", hashlib.sha256).hexdigest()
+
+
+def admin(request: Request, cred: HTTPBasicCredentials | None = Depends(security)):
     if not ADMIN_PASSWORD:
         raise HTTPException(503, "ADMIN_PASSWORD تنظیم نشده است.")
-    ok = secrets.compare_digest(cred.username, ADMIN_USER) and secrets.compare_digest(cred.password, ADMIN_PASSWORD)
+    tok = request.cookies.get(_ADMIN_COOKIE) or ""
+    if tok and secrets.compare_digest(tok, _admin_token()):
+        return True
+    ok = cred is not None and secrets.compare_digest(cred.username, ADMIN_USER) and secrets.compare_digest(cred.password, ADMIN_PASSWORD)
     if not ok:
+        if request.url.path == "/admin" and request.method == "GET":
+            raise HTTPException(307, headers={"Location": "/admin/login"})
         raise HTTPException(401, headers={"WWW-Authenticate": "Basic"})
     return True
+
+
+_LOGIN_HTML = """<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ورود ادمین ناوا</title><style>body{font-family:system-ui;background:#0b1020;color:#eee;display:grid;place-items:center;height:100vh;margin:0}
+form{background:#151b30;padding:28px;border-radius:14px;width:300px}input,button{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:0;font-size:16px}button{background:#6c5ce7;color:#fff}</style>
+<form method="post" action="/admin/login"><h2>ورود ادمین ناوا</h2>__ERR__<input name="username" value="admin" autocomplete="username" placeholder="نام کاربری">
+<input name="password" type="password" autocomplete="current-password" placeholder="رمز"><button type="submit">ورود</button></form></html>"""
+
+
+@app.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page():
+    return HTMLResponse(_LOGIN_HTML.replace("__ERR__", ""))
+
+
+@app.post("/admin/login")
+async def admin_login(request: Request):
+    from urllib.parse import parse_qs
+    body = parse_qs((await request.body()).decode("utf-8", "ignore"))
+    u = (body.get("username") or [""])[0]; pw = (body.get("password") or [""])[0]
+    if ADMIN_PASSWORD and secrets.compare_digest(u, ADMIN_USER) and secrets.compare_digest(pw, ADMIN_PASSWORD):
+        r = RedirectResponse("/admin", status_code=303)
+        r.set_cookie(_ADMIN_COOKIE, _admin_token(), max_age=7 * 86400, httponly=True, secure=True, samesite="lax")
+        return r
+    time.sleep(1)
+    return HTMLResponse(_LOGIN_HTML.replace("__ERR__", "<p style='color:#f77'>رمز اشتباه است.</p>"), status_code=401)
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -1438,7 +1484,7 @@ def download_admin():
     with db() as c:
         n = int(_kv_get(c, "downloads_admin")) + 1
         c.execute("INSERT OR REPLACE INTO kv VALUES('downloads_admin', ?)", (str(n),))
-    return RedirectResponse(f"https://github.com/seakurd/Nava/raw/download/NavaAdmin-{name}.apk", status_code=302)
+    return RedirectResponse(f"/apk/NavaAdmin-{name}.apk", status_code=302)
 
 
 @app.get("/api/versions")
@@ -1517,6 +1563,50 @@ def app_redirect():
     return RedirectResponse("/app/")
 
 app.mount("/app", StaticFiles(directory=Path(__file__).parent / "web", html=True), name="web")
+# آینه‌ی سایت روی همین دامنه (github.io در ایران فیلتر است)
+app.mount("/site", StaticFiles(directory=Path(__file__).parent / "site", html=True), name="site")
+
+
+# ------------------------------------------------------------------ پراکسی APK (بدون نیاز به گیت‌هاب برای کاربر)
+import re as _re, threading as _th, tempfile as _tf
+from fastapi.responses import FileResponse as _FileResponse
+_APK_DIR = Path(os.environ.get("NAVA_APK_CACHE") or (Path(_tf.gettempdir()) / "nava-apk"))
+_APK_LOCK = _th.Lock()
+
+
+def _apk_cached(name: str) -> Path:
+    _APK_DIR.mkdir(parents=True, exist_ok=True)
+    f = _APK_DIR / name
+    if f.exists() and f.stat().st_size > 1_000_000:
+        return f
+    with _APK_LOCK:
+        if f.exists() and f.stat().st_size > 1_000_000:
+            return f
+        tmp = f.with_suffix(".part")
+        url = f"https://raw.githubusercontent.com/seakurd/Nava/download/{name}"
+        with httpx.stream("GET", url, follow_redirects=True, timeout=120) as r:
+            if r.status_code != 200:
+                raise HTTPException(404, "not found")
+            with open(tmp, "wb") as o:
+                for chunk in r.iter_bytes(256 * 1024):
+                    o.write(chunk)
+        if tmp.stat().st_size < 1_000_000:
+            tmp.unlink(missing_ok=True); raise HTTPException(404, "bad file")
+        tmp.replace(f)
+        for old in _APK_DIR.glob("*.apk"):   # فقط چند نسخه‌ی آخر بماند
+            if old != f and old.name.split("-")[0] == name.split("-")[0] and "latest" not in old.name:
+                try: old.unlink()
+                except Exception: pass
+        return f
+
+
+@app.get("/apk/{name}")
+def apk(name: str):
+    if not _re.fullmatch(r"(Nava|NavaAdmin)-[0-9A-Za-z.]+\.apk", name):
+        raise HTTPException(404, "not found")
+    f = _apk_cached(name)
+    return _FileResponse(f, media_type="application/vnd.android.package-archive", filename=name,
+                         headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/")

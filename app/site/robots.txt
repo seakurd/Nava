@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://nava-server-irc5.onrender.com/site/sitemap.xml
