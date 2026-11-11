@@ -20,7 +20,7 @@ ERROR_COOLDOWN = 5 * 60
 STARTED = time.time()
 
 PRESETS = {
-    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash"),
+    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-3.5-flash"),
     "groq": ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
     "openrouter": ("https://openrouter.ai/api/v1", "meta-llama/llama-3.3-70b-instruct:free"),
     "openai": ("https://api.openai.com/v1", "gpt-4o-mini"),
@@ -31,7 +31,7 @@ PRESETS = {
 }
 # ترجیح مدل وقتی مدل فعلی از فهرست /models حذف شده باشد (سریع و ارزان اول)
 PREFER = [
-    r"gemini-2\.5-flash$", r"gemini-2\.0-flash$", r"gemini-.*flash(?!.*(image|tts|live|thinking))",
+    r"gemini-3\.5-flash$", r"gemini-3\.\d-flash$", r"gemini-flash-latest$", r"gemini-2\.5-flash$", r"gemini-2\.0-flash$", r"gemini-.*flash(?!.*(image|tts|live|thinking))",
     r"llama-3\.3-70b-versatile", r"llama-3\.1-8b-instant", r"gpt-4o-mini$", r"gpt-4\.1-mini$",
     r"deepseek-chat$", r"mistral-small-latest$", r":free$", r"llama", r"gpt", r"qwen",
 ]
