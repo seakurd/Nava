@@ -165,6 +165,15 @@ async def check_entry(e: dict) -> dict:
     t0 = time.time()
     try:
         r = await _client.post(f"{base}/chat/completions", json=body, headers=h)
+        # مدل پیدا نشد → تا ۴ مدل دیگر از فهرست را همین حالا امتحان کن
+        tried = {_model(e)}
+        while r.status_code == 404 and e.get("models") and len(tried) < 5:
+            nm = pick_model([x for x in e["models"] if x not in tried], "")
+            if not nm or nm in tried:
+                break
+            tried.add(nm); e["model"] = nm; body["model"] = nm
+            t0 = time.time()
+            r = await _client.post(f"{base}/chat/completions", json=body, headers=h)
         ms = int((time.time() - t0) * 1000)
         if r.status_code == 200:
             e.update(status="ok", last_error="", latency_ms=ms, fails=0, cooldown_until=0, ok_at=int(now * 1000))
@@ -180,7 +189,7 @@ async def check_entry(e: dict) -> dict:
             if prev != "quota":
                 alert(f"سهمیه‌ی کلید «{e.get('label') or e.get('provider')}» تمام شد؛ ۳۰ دقیقه کنار می‌رود.", "warn")
         elif r.status_code == 404:
-            e.update(status="error", last_error=f"مدل {_model(e)} پیدا نشد", fails=e.get("fails", 0) + 1,
+            e.update(status="error", last_error=f"مدل {_model(e)} پیدا نشد: {r.text[:140]}", fails=e.get("fails", 0) + 1,
                      cooldown_until=int((now + ERROR_COOLDOWN) * 1000))
             if e.get("models"):
                 e["model"] = pick_model([x for x in e["models"] if x != _model(e)], "")
