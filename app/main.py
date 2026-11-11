@@ -36,7 +36,8 @@ DEFAULT_CONFIG = {
     "ads_enabled": True, "ad_every_n": 1, "ad_skip_seconds": 5,
     "referral_days": 3, "pro_invites": 5,
     # ۴٫۳: هدیه‌ها (همه خودکار روی سرور)
-    "signup_bonus_hours": 24,                # ثبت‌نام تازه = ۲۴ ساعت پرو (یک‌بار به ازای دستگاه و حساب)
+    "signup_bonus_hours": 360,               # ثبت‌نام تازه = ۱۵ روز پرو (یک‌بار به ازای دستگاه و حساب)
+    "install_bonus_hours": 360,              # نصب/دانلود تازه = ۱۵ روز پرو (یک‌بار به ازای دستگاه)
     "referral_bonus_hours": 24,              # هر دعوت موفق = ۲۴ ساعت پرو برای هر دو نفر
     "referral_milestone": 13,                # هر ۱۳ دعوت موفق =
     "referral_milestone_days": 30,           # ۱ ماه پرو هدیه
@@ -256,6 +257,14 @@ def touch_device(c, device: str, code: str = "", version: int = 0):
     if not r:
         c.execute("INSERT INTO devices(id, code, first_seen, last_seen, version) VALUES(?,?,?,?,?)",
                   (device, code or None, t, t, version))
+        try:   # بدون get_config (داخل with db() بن‌بست می‌شود)
+            rc = c.execute("SELECT v FROM kv WHERE k='config'").fetchone()
+            hrs = int((json.loads(rc["v"]) if rc else {}).get("install_bonus_hours", DEFAULT_CONFIG["install_bonus_hours"]) or 0)
+        except Exception:
+            hrs = 0
+        if hrs > 0:
+            extend_pro(c, device, hrs / 24, "install")
+            c.execute("INSERT INTO rewards VALUES(?,?,?,?,?)", (device, 0, "install", hrs, t))
     else:
         c.execute("UPDATE devices SET last_seen=?, version=MAX(version, ?) WHERE id=?", (t, version, device))
         if code and not r["code"]:
