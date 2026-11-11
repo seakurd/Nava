@@ -404,9 +404,9 @@ def setup(app):
         if not device:
             raise HTTPException(400, "device")
         cfg = m.get_config()
-        need = max(1, int(cfg.get("reward_ad_needed", 12)))      # چند آگهی تا یک بار پرو
-        hours = float(cfg.get("reward_ad_pro_hours", 24))        # مدت پرو بعد از کامل شدن (ادمین تعیین می‌کند)
-        cap = int(cfg.get("reward_ad_daily", 12))
+        need = max(1, int(cfg.get("reward_ad_needed", 18)))      # چند آگهی تا یک بار پرو
+        hours = float(cfg.get("reward_ad_pro_hours", 240))        # مدت پرو بعد از کامل شدن (ادمین تعیین می‌کند)
+        cap = int(cfg.get("reward_ad_daily", 18))
         if not cfg.get("reward_ad_enabled", True) or hours <= 0:
             return {"ok": False, "msg": "پاداش آگهی فعلاً خاموش است."}
         day = time.strftime("%Y%m%d", time.gmtime())

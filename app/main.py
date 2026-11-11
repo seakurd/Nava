@@ -62,8 +62,8 @@ DEFAULT_CONFIG = {
     # نسخه‌ی ادمین
     "admin_latest_name": "2.3.0", "admin_latest_code": 6,
     # ۴٫۴: تبلیغ و پاداش
-    "reward_ad_enabled": True, "reward_ad_minutes": 30, "reward_ad_daily": 12,
-    "reward_ad_needed": 12, "reward_ad_pro_hours": 24,   # ۱۲ ویدیوی کامل = پرو به مدت تعیین‌شده توسط ادمین
+    "reward_ad_enabled": True, "reward_ad_minutes": 30, "reward_ad_daily": 18,
+    "reward_ad_needed": 18, "reward_ad_pro_hours": 240,   # ۱۸ ویدیوی کامل = ۱۰ روز؛ = پرو به مدت تعیین‌شده توسط ادمین
     "banner_enabled": True, "banner_pages": ["home", "chat", "tools", "settings"],
     "admob_enabled": False, "admob_app_id": "", "admob_banner": "", "admob_rewarded": "",   # نیاز: حساب AdMob + بیلد با SDK گوگل
     "adsense_enabled": False, "adsense_client": "", "adsense_slot": "",                  # سایت: نیاز به تأیید دامنه در AdSense
@@ -159,7 +159,23 @@ persist.start(DB, _lock)
 now_ms = lambda: int(time.time() * 1000)
 
 
+_cfg_cache = {"t": 0.0, "v": None}
+
+
 def get_config() -> dict:
+    """کش ۱۰ ثانیه‌ای در حافظه؛ save_config آن را باطل می‌کند (سرعت: هر درخواست دیگر sqlite+json نمی‌خواند)."""
+    v = _cfg_cache["v"]
+    if v is not None and time.time() - _cfg_cache["t"] < 10:
+        return json.loads(v)
+    cfg = _get_config_uncached()
+    try:
+        _cfg_cache["v"] = json.dumps(cfg, ensure_ascii=False); _cfg_cache["t"] = time.time()
+    except Exception:
+        pass
+    return cfg
+
+
+def _get_config_uncached() -> dict:
     with db() as c:
         r = c.execute("SELECT v FROM kv WHERE k='config'").fetchone()
     cfg = dict(DEFAULT_CONFIG)
@@ -245,6 +261,7 @@ def zp_merchant(cfg: dict):
 
 
 def save_config(cfg: dict):
+    _cfg_cache["v"] = None
     with db() as c:
         c.execute("INSERT OR REPLACE INTO kv VALUES('config', ?)", (json.dumps(cfg, ensure_ascii=False),))
 
@@ -506,6 +523,101 @@ async def _proxy(url: str, headers: dict, body: dict):
     return Response(content=r.content, status_code=200, media_type="application/json")
 
 
+async def _open(url: str, headers: dict, body: dict):
+    """(پاسخ، بستن، کد). پاسخ None یعنی شکست قبل از شروع."""
+    if body.get("stream"):
+        req = _ai_client.build_request("POST", url, json=body, headers=headers)
+        r = await _ai_client.send(req, stream=True)
+        if r.status_code != 200:
+            await r.aclose()
+            return None, None, r.status_code
+
+        async def gen():
+            try:
+                async for chunk in r.aiter_raw():
+                    yield chunk
+            finally:
+                await r.aclose()
+        return (StreamingResponse(gen(), media_type="text/event-stream",
+                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}), r.aclose, 200)
+    r = await _ai_client.post(url, json=body, headers=headers)
+    if r.status_code != 200:
+        return None, None, r.status_code
+    return Response(content=r.content, status_code=200, media_type="application/json"), None, 200
+
+
+def _variants(url: str, model: str, body: dict) -> list:
+    clean = {k: body[k] for k in ALLOWED_KEYS if k in body}
+    clean["model"] = model
+    variants = [clean]
+    if "api.openai.com" in url:
+        v = dict(clean); mt = v.pop("max_tokens", None); v.pop("temperature", None)
+        if mt:
+            v["max_completion_tokens"] = mt
+        variants = [v]
+    variants.append({k: clean[k] for k in ("model", "messages", "stream", "tools", "tool_choice") if k in clean})
+    return variants
+
+
+async def _try_target(target, body):
+    url, headers, model, pool_id = target
+    code = 0
+    for v in _variants(url, model, body):
+        try:
+            res, closer, code = await asyncio.wait_for(_open(url, headers, v), 18)
+            if res is not None:
+                return res, closer, 200
+            if code in (401, 403, 429):
+                break          # کلید خراب/سهمیه: نسخه‌ی دیگر فایده ندارد
+        except Exception:
+            code = code or 0
+    return None, None, code
+
+
+async def _hedge(targets: list, body: dict, stagger: float = 1.2):
+    """مسابقه‌ی پلکانی: کلید اول شروع، اگر تا ۱٫۲ ثانیه سرآیند نیامد کلید بعدی هم موازی؛ اولین موفق برنده."""
+    tasks = {}
+    order = list(targets)
+    winner = None
+
+    def launch():
+        tg = order.pop(0)
+        tasks[asyncio.create_task(_try_target(tg, body))] = tg
+
+    launch()
+    try:
+        while tasks:
+            done, _ = await asyncio.wait(list(tasks), timeout=stagger if order else None,
+                                         return_when=asyncio.FIRST_COMPLETED)
+            if not done:
+                launch(); continue
+            for d in done:
+                tg = tasks.pop(d)
+                try:
+                    res, closer, code = d.result()
+                except Exception:
+                    res, closer, code = None, None, 0
+                pid = tg[3]
+                if res is not None and winner is None:
+                    winner = res
+                    if pid:
+                        v44.report_ok(pid)
+                elif res is not None:
+                    if closer:
+                        try: await closer()
+                        except Exception: pass
+                elif pid:
+                    v44.report_failure(pid, code)
+            if winner is not None:
+                return winner
+            if order and not tasks:
+                launch()
+        return None
+    finally:
+        for tk in tasks:
+            tk.cancel()
+
+
 def _is_pro(device: str) -> bool:
     if not device:
         return False
@@ -525,38 +637,19 @@ async def api_ai(request: Request, device: str = ""):
     t0 = time.time()
     cfg = get_config()
     t = ai_target(cfg)
-    if t and cfg.get("ai_pro_only") and not _is_pro(device):
+    allowed = not (cfg.get("ai_pro_only") and not _is_pro(device))
+    if t and not allowed:
         t = None
     targets = []
-    if not (cfg.get("ai_pro_only") and not _is_pro(device)):
+    if allowed:
         targets = v44.pool_targets()          # ۴٫۴: استخر کلیدهای سالم (نگهبان)
     if t:
         targets.append((*t, None))
-    for url, headers, model, pool_id in targets:
-        clean = {k: body[k] for k in ALLOWED_KEYS if k in body}
-        clean["model"] = model
-        variants = [clean]
-        if "api.openai.com" in url:
-            # مدل‌های جدید OpenAI: max_completion_tokens و بدون temperature
-            v = dict(clean); mt = v.pop("max_tokens", None); v.pop("temperature", None)
-            if mt:
-                v["max_completion_tokens"] = mt
-            variants = [v]
-        minimal = {k: clean[k] for k in ("model", "messages", "stream", "tools", "tool_choice") if k in clean}
-        variants.append(minimal)
-        ok = False
-        for v in variants:
-            try:
-                res = await _proxy(url, headers, v)
-                if res is not None:
-                    _ai_log(True, t0, "pool" if pool_id else "key")
-                    if pool_id:
-                        v44.report_ok(pool_id)
-                    return res
-            except Exception:
-                pass
-        if pool_id:
-            v44.report_failure(pool_id, _last_status.get("code", 0))
+    if targets:
+        res = await _hedge(targets, body)
+        if res is not None:
+            _ai_log(True, t0, "pool")
+            return res
     # مغز رایگان: LLM7 (سریع، ابزار) ← Pollinations (کند ولی همیشگی)
     free = {k: body[k] for k in ALLOWED_KEYS if k in body}
     for i, model in enumerate(("default", "fast")):
