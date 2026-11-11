@@ -207,16 +207,16 @@ async function decide(id,d){if(d=='reject'&&!confirm('رد شود؟'))return;awa
 loadConfig();loadStats();
 
 // ---------- ۴٫۴: استخر کلید
-const ST={ok:'✅ سالم',bad:'⛔ نامعتبر',quota:'⏳ سهمیه',error:'⚠️ خطا',unknown:'… نامشخص'};
+const KST={ok:'✅ سالم',bad:'⛔ نامعتبر',quota:'⏳ سهمیه',error:'⚠️ خطا',unknown:'… نامشخص'};
 const fa=n=>new Date(n).toLocaleString('fa-IR');
 async function loadKeys(){const d=await api('/admin/api/keys');
  $('keySum').textContent=`${d.healthy} کلید سالم از ${d.keys.length}`+(d.keys.length&&!d.healthy?' — ناوا الان روی مغز رایگان است.':'');
  $('keysTbl').innerHTML='<tr><th>نام</th><th>ارائه‌دهنده</th><th>کلید</th><th>مدل</th><th>وضعیت</th><th>تأخیر</th><th>استفاده</th><th>آخرین تست</th><th></th></tr>'+d.keys.map(k=>
- `<tr><td>${esc(k.label||'')}</td><td>${esc(k.provider)}</td><td><code>${esc(k.key_mask)}</code></td><td><code>${esc(k.model||'')}</code></td><td title="${esc(k.last_error||'')}">${ST[k.status]||esc(k.status)}${k.last_error?'<br><small class="muted">'+esc(k.last_error)+'</small>':''}</td><td>${k.latency_ms||'—'}ms</td><td>${k.uses||0}/${k.uses_fail||0}</td><td>${k.last_check?fa(k.last_check):'—'}</td>
+ `<tr><td>${esc(k.label||'')}</td><td>${esc(k.provider)}</td><td><code>${esc(k.key_mask)}</code></td><td><code>${esc(k.model||'')}</code></td><td title="${esc(k.last_error||'')}">${KST[k.status]||esc(k.status)}${k.last_error?'<br><small class="muted">'+esc(k.last_error)+'</small>':''}</td><td>${k.latency_ms||'—'}ms</td><td>${k.uses||0}/${k.uses_fail||0}</td><td>${k.last_check?fa(k.last_check):'—'}</td>
  <td><button class="btn alt" onclick="toggleKey('${k.id}',${!k.enabled})">${k.enabled?'خاموش':'روشن'}</button> <button class="btn red" onclick="delKey('${k.id}')">✕</button></td></tr>`).join('');
  $('alertsTbl').innerHTML=(d.alerts||[]).map(a=>`<tr><td>${fa(a.ts)}</td><td>${a.level=='error'?'🔴':a.level=='warn'?'🟠':'🔵'} ${esc(a.msg)}</td></tr>`).join('')||'<tr><td class="muted">هشداری نیست.</td></tr>'}
 async function addKey(){try{const r=await api('/admin/api/keys','POST',{key:$('k_key').value.trim(),provider:$('k_prov').value,label:$('k_label').value,model:$('k_model').value,base_url:$('k_base').value,priority:+$('k_pri').value||5});
- $('k_key').value='';toast('اضافه شد: '+(ST[r.key.status]||r.key.status));loadKeys()}catch(e){toast('خطا: '+e.message)}}
+ $('k_key').value='';toast('اضافه شد: '+(KST[r.key.status]||r.key.status));loadKeys()}catch(e){toast('خطا: '+e.message)}}
 async function checkKeys(){toast('در حال تست…');await api('/admin/api/keys/check','POST');loadKeys();toast('تست شد')}
 async function toggleKey(id,on){await api('/admin/api/keys','POST',{id,enabled:on});loadKeys()}
 async function delKey(id){if(confirm('این کلید حذف شود؟')){await api('/admin/api/keys/'+id,'DELETE');loadKeys()}}
