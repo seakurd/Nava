@@ -1,18 +1,24 @@
 name: keep-nava-awake
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
+  push:
+    paths: [".github/workflows/keepalive.yml"]
+concurrency:
+  group: keep-nava-awake
+  cancel-in-progress: false
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 355
     steps:
-      - name: Ping Nava server
+      - name: Keep Nava server awake (ping every 4 min for ~5h50m)
         run: |
-          for i in 1 2 3; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" -m 60 https://nava-server-irc5.onrender.com/health) && echo "health=$code"
-            [ "$code" = "200" ] && exit 0
-            sleep 15
+          end=$(( $(date +%s) + 350*60 ))
+          while [ $(date +%s) -lt $end ]; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 90 https://nava-server-irc5.onrender.com/health || echo 000)
+            echo "$(date -u +%H:%M:%S) health=$code"
+            if [ "$code" != "200" ]; then sleep 20; continue; fi
+            sleep 240
           done
-          echo "server not healthy"; exit 1
